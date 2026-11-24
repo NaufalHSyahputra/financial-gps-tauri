@@ -63,7 +63,7 @@
 {/if}
 
 {#if tabs}
-  <nav aria-label="Mobile navigation" class="liquid-glass-bar fixed inset-x-0 bottom-[calc(var(--mobile-safe-bottom)+0.5rem)] z-30 mx-3 rounded-full px-2 py-1.5 select-none md:hidden">
+  <nav aria-label="Mobile navigation" class="liquid-glass-bar fixed right-[env(safe-area-inset-right,0px)] bottom-[calc(var(--mobile-safe-bottom)+0.5rem)] left-[env(safe-area-inset-left,0px)] z-30 mx-3 rounded-full px-2 py-1.5 select-none md:hidden">
     <div class="grid h-14 grid-cols-5 items-center gap-0.5">
       <Button variant="ghost" href="/dashboard" aria-current={path==='/dashboard'?'page':undefined} class="tactile mobile-tab rounded-full"><NavIcon name="home" active={path==='/dashboard'}/>Home</Button>
       <Button variant="ghost" href="/transactions" aria-current={path==='/transactions'?'page':undefined} class="tactile mobile-tab rounded-full"><NavIcon name="activity" active={path==='/transactions'}/>Activity</Button>

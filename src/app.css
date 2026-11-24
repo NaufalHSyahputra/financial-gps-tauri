@@ -339,6 +339,11 @@
     .mobile-chip[aria-current='page'], .mobile-chip[aria-pressed='true'] { @apply border-status bg-ground text-ink; }
     .mobile-scroll-strip { @apply flex min-w-0 gap-2 overflow-x-auto; scrollbar-width: none; }
     .mobile-scroll-strip::-webkit-scrollbar { display: none; }
+    .mobile-section-nav {
+      @apply sticky z-10 mb-4 w-full gap-1 rounded-xl border border-line bg-paper/90 p-1 backdrop-blur-md;
+      top: calc(3.5rem + var(--mobile-safe-top));
+    }
+    .settings-section { scroll-margin-top: 3.5rem; }
     .mobile-sticky-actions {
       @apply sticky bottom-0 z-10 grid grid-cols-[auto_1fr] items-center gap-2 border-t border-line bg-paper px-4 pt-3;
       padding-bottom: calc(.75rem + var(--mobile-safe-bottom));
@@ -370,6 +375,7 @@
 }
 
 @media (width < 48rem) {
+  html:has(.mobile-workspace[data-tabs='true']) { scroll-padding-bottom: var(--mobile-tabs-height); }
   .mobile-workspace { padding-bottom: calc(1rem + var(--mobile-safe-bottom)); }
   .mobile-workspace[data-tabs='true'] { padding-bottom: calc(7rem + var(--mobile-safe-bottom)); }
   .mobile-workspace[data-wizard='true'] { padding: 0; }

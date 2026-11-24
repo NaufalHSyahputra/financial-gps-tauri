@@ -27,8 +27,8 @@
   }
 </script>
 
-<Card as="section" id="financial-calendar" aria-labelledby="financial-calendar-title">
-  <h2 id="financial-calendar-title" class="section-title">Payday calendar</h2>
+<Card as="section" id="financial-calendar" aria-labelledby="settings-calendar-sync">
+  <h2 id="settings-calendar-sync" class="settings-section section-title">Payday calendar</h2>
   <p class="mt-1 text-sm text-muted-foreground">Set the day your spending cycle starts. The date clamps to the end of shorter months before any weekend adjustment.</p>
   <Feedback error={task.error || calendar.error} loading={calendar.loading} />
   {#if calendar.value}

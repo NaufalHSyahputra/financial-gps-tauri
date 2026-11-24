@@ -64,7 +64,7 @@
   }
 </script>
 <Heading title="Budgets" />
-<div class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Budget period">
+<div class="mobile-section-nav mb-4 flex flex-wrap gap-2 max-md:grid max-md:grid-cols-2" role="group" aria-label="Budget period">
   <Button variant={view === 'cycle' ? 'default' : 'outline'} aria-pressed={view === 'cycle'} onclick={() => selection = 'cycle'}>Payday cycle</Button>
   <Button variant={view === 'monthly' ? 'default' : 'outline'} aria-pressed={view === 'monthly'} onclick={() => selection = 'monthly'}>Monthly</Button>
 </div>
@@ -73,8 +73,8 @@
   {#if view === 'cycle'}
     <CycleBudgets />
   {:else}
-<div class="mb-4 flex flex-wrap items-end gap-2">
-  <Label class="field">Month<Input type="month" bind:value={month} required/></Label>
+<div class="mb-4 flex flex-wrap items-end gap-2 max-md:grid max-md:grid-cols-2 max-md:[&>button]:min-w-0 max-md:[&>button]:px-2 max-md:[&>button]:whitespace-normal">
+  <Label class="field">Month<Input type="month" class="max-md:px-2 max-md:[&::-webkit-calendar-picker-indicator]:m-0 max-md:[&::-webkit-calendar-picker-indicator]:p-0" bind:value={month} required/></Label>
   <Button variant="outline" onclick={()=>{sourceMonth='';adjustment='0';overwrite=false;mode='copy';}}>Copy month</Button>
   <Button variant="outline" onclick={()=>{suggestions=[];mode='suggest';}}>Historical suggestions</Button>
   <Button variant="default"  onclick={()=>edit()}>Set limit</Button>

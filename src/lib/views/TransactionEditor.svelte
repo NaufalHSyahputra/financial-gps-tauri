@@ -4,6 +4,7 @@
   import TransactionCategoryIcon from '#lib/icons/TransactionCategoryIcon.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
+  import { tick } from 'svelte';
   import { Badge } from '#lib/components/ui/badge/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
   import { NativeSelect } from '#lib/components/ui/native-select/index.js';
@@ -19,11 +20,25 @@
   import { jobs } from '../stores/jobs.svelte';
   import { minorToInput } from '../money';
   import Heading from '../components/Heading.svelte';
+  import MobileSectionSwitcher from '../components/MobileSectionSwitcher.svelte';
   import Feedback from '../components/Feedback.svelte';
   import MoneyField from '../components/MoneyField.svelte';
   import Modal from '../components/Modal.svelte';
 
   let {id}: {id:string}=$props();
+  const sections = [['all', 'All'], ['details', 'Details'], ['files', 'Splits & Files'], ['corrections', 'Corrections']] as const;
+  let selectedSection = $state<(typeof sections)[number][0]>('all');
+  const showDetails = $derived(selectedSection === 'all' || selectedSection === 'details');
+  const showFiles = $derived(selectedSection === 'all' || selectedSection === 'files');
+  const showCorrections = $derived(selectedSection === 'all' || selectedSection === 'corrections');
+  function revealInvalidField(event: Event) {
+    const field = event.target;
+    if (selectedSection === 'all' || !(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)
+      || field.getClientRects().length) return;
+    event.preventDefault();
+    selectedSection = 'all';
+    void tick().then(() => field.reportValidity());
+  }
   const accounts=query(()=>session.call(commands.accountsList(session.scope,{})));
   const categories=query(()=>session.call(commands.categoriesList(session.scope,{page:pageRequest(null,200)})));
   const payees=query(()=>session.call(commands.payeesList(session.scope,{page:pageRequest(null,200)})));
@@ -42,6 +57,9 @@
   const voided=$derived(audit.value?.some(entry=>entry.action==='void')??false);
   const task=createTask();
   const snapshot=$derived(data.value);
+  const canVoid = $derived(snapshot?.row.status === 'posted' && snapshot.row.entryKind === 'ordinary' &&
+    !snapshot.row.transferId && !snapshot.row.ignored && !snapshot.draft.installment);
+  const canRemove = $derived(snapshot && !snapshot.row.transferId && snapshot.row.entryKind !== 'opening');
   let loaded=$state('');
   let accountId=$state(page.url.searchParams.get('account')??'');
   let value=$state('');
@@ -61,6 +79,7 @@
   let splits=$state<{key:string;categoryId:string;value:string}[]>([]);
   const currency=$derived(accounts.value?.find(item=>item.id===accountId)?.account.currencyCode ?? snapshot?.draft.amount.currency ?? session.active?.baseCurrency ?? '');
   const protectedSource=$derived(!!snapshot?.sources.length || !!snapshot?.row.transferId);
+  const canPost = $derived(snapshot?.row.status === 'projected' && !protectedSource);
   let installmentCount=$state(2);
   let installmentDate=$state(today());
   let installmentScope=$state<InstallmentScope>('all');
@@ -218,12 +237,13 @@
   </div>{/if}
   <Button variant="outline"  href="/transactions">All transactions</Button>
 </Heading>
+<MobileSectionSwitcher label="Transaction sections" options={sections} bind:selected={selectedSection}/>
 <Feedback error={task.error||data.error||accounts.error||files.error||link.error} loading={data.loading}/>
 {#if snapshot && accounts.value}
   {#if !accounts.value.length}<Card as="p" class="">Create an <a class="mobile-touch-link underline" href="/accounts">account</a> before adding transactions.</Card>
   {:else}
     {#if snapshot}
-      <Card class="mb-4 flex flex-wrap items-center gap-4">
+      <Card class={['mb-4 flex flex-wrap items-center gap-4', !showDetails && 'max-md:hidden']}>
         <span class="numeric text-xl">{privacy.money(snapshot.row.amount)}</span><Badge variant="secondary" class="capitalize">{voided ? 'Voided' : snapshot.row.status}</Badge>
         <span class="text-sm text-muted-foreground">Reporting date {privacy.date(snapshot.row.reportingDate)}</span>
         {#if snapshot.sources.length}<Badge variant="secondary" >Imported</Badge>{/if}
@@ -235,13 +255,13 @@
     {#if link.value}
       {@const pair=link.value.pair}
       {@const other=pair.source.row.id===id?pair.destination.row:pair.source.row}
-      <Card as="section" class="mb-4">
+      <Card as="section" class={['mb-4', !showDetails && 'max-md:hidden']}>
         <h2 class="section-title">Linked transfer</h2>
         <p class="mt-2"><a class="mobile-touch-link underline" href={'/transactions/'+other.id}>Other side of the transfer</a> · <span class="numeric">{privacy.money(other.amount)}</span></p>
       </Card>
     {/if}
     {#if audit.value?.length}
-      <Card as="section" class="mb-4">
+      <Card as="section" class={['mb-4', !showCorrections && 'max-md:hidden']}>
         <h2 class="section-title">Posting history</h2>
         <ul class="mt-2 divide-y divide-line">
           {#each audit.value as entry (entry.id)}
@@ -255,7 +275,7 @@
       </Card>
     {/if}
     {#if transfer}
-      <Card as="form" class="mb-4 space-y-4" onsubmit={saveTransfer}>
+      <Card as="form" class={['mb-4 space-y-4', !showDetails && 'max-md:hidden']} onsubmit={saveTransfer}>
         <h2 class="section-title">Match an existing transaction</h2>
           <div class="form-grid">
             <Label class="field">Other account<NativeSelect bind:value={matchAccount}><option value="">All accounts</option>{#each accounts.value.filter(item=>item.id!==accountId && item.account.currencyCode===currency) as item (item.id)}<option value={item.id}>{item.account.name}</option>{/each}</NativeSelect></Label>
@@ -271,29 +291,32 @@
       </Card>
     {/if}
       {#if !voided}
-      <Card as="form" id="transaction-editor" class="space-y-4" onsubmit={save}>
-        <div class="form-grid">
-          <Label class="field">Account<NativeSelect bind:value={accountId} required disabled={protectedSource}><option value="">Choose account</option>{#each accounts.value as item (item.id)}<option value={item.id}>{item.account.name} · {item.account.currencyCode}</option>{/each}</NativeSelect></Label>
-          <MoneyField bind:value disabled={protectedSource}/>
-          <Label class="field">Description<Input bind:value={description} maxlength={256} required/></Label>
-          <Label class="field">Transaction date<Input type="date" bind:value={bankDate} disabled={protectedSource} required/></Label>
-          <Label class="field">Direction<NativeSelect bind:value={direction} disabled={protectedSource}><option value="debit">Money out</option><option value="credit">Money in</option></NativeSelect></Label>
-          <Label class="field">Status<NativeSelect bind:value={status} disabled={protectedSource}><option value="posted">Confirmed</option><option value="pending">Pending</option><option value="projected">Expected</option></NativeSelect></Label>
-          <Label class="field">Person or store<NativeSelect bind:value={payee}><option value="">No person or store</option>{#each payees.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
-          <Label class="field">Category<NativeSelect bind:value={category} disabled={!!splits.length||!!snapshot?.row.transferId}><option value="">Uncategorized</option>{#each categories.value?.rows.filter(item=>item.draft.kind!=='transfer')??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
-          <Label class="field">Bill date (optional)<Input type="date" bind:value={billDate}/></Label>
-          <Label class="field">Use a different date in reports<Input type="date" bind:value={reportDate}/></Label>
-        </div>
-        <Label class="field">Notes<Textarea bind:value={notes} rows={3} maxlength={1000}></Textarea></Label>
-        {#if tags.length}<ul class="flex flex-wrap gap-2" aria-label="Tags">{#each tags as tag (tag)}<li><Badge variant="secondary">{tag}</Badge></li>{/each}</ul>{/if}
-        <div class="flex flex-wrap items-center gap-4">
-          <Label class="check"><NativeCheckbox  bind:checked={ignored} disabled={!!snapshot?.row.transferId}/> Ignore transaction</Label>
-          <Label class="check"><NativeCheckbox  bind:checked={pnl}/> Leave out of income and expense totals</Label>
-          <Label class="check"><NativeCheckbox  bind:checked={flagged}/> Flag</Label>
-          {#if flagged}<Label class="field">Flag due date<Input type="date" bind:value={due}/></Label>{/if}
+      <Card as="form" id="transaction-editor" class={['space-y-4', selectedSection === 'corrections' && !canVoid && !canRemove && !canPost && 'max-md:hidden']}
+        onsubmit={save} oninvalidcapture={revealInvalidField}>
+        <div class={['space-y-4', !showDetails && 'max-md:hidden']}>
+          <div class="form-grid">
+            <Label class="field">Account<NativeSelect bind:value={accountId} required disabled={protectedSource}><option value="">Choose account</option>{#each accounts.value as item (item.id)}<option value={item.id}>{item.account.name} · {item.account.currencyCode}</option>{/each}</NativeSelect></Label>
+            <MoneyField bind:value disabled={protectedSource}/>
+            <Label class="field">Description<Input bind:value={description} maxlength={256} required/></Label>
+            <Label class="field">Transaction date<Input type="date" bind:value={bankDate} disabled={protectedSource} required/></Label>
+            <Label class="field">Direction<NativeSelect bind:value={direction} disabled={protectedSource}><option value="debit">Money out</option><option value="credit">Money in</option></NativeSelect></Label>
+            <Label class="field">Status<NativeSelect bind:value={status} disabled={protectedSource}><option value="posted">Confirmed</option><option value="pending">Pending</option><option value="projected">Expected</option></NativeSelect></Label>
+            <Label class="field">Person or store<NativeSelect bind:value={payee}><option value="">No person or store</option>{#each payees.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
+            <Label class="field">Category<NativeSelect bind:value={category} disabled={!!splits.length||!!snapshot?.row.transferId}><option value="">Uncategorized</option>{#each categories.value?.rows.filter(item=>item.draft.kind!=='transfer')??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
+            <Label class="field">Bill date (optional)<Input type="date" bind:value={billDate}/></Label>
+            <Label class="field">Use a different date in reports<Input type="date" bind:value={reportDate}/></Label>
+          </div>
+          <Label class="field">Notes<Textarea bind:value={notes} rows={3} maxlength={1000}></Textarea></Label>
+          {#if tags.length}<ul class="flex flex-wrap gap-2" aria-label="Tags">{#each tags as tag (tag)}<li><Badge variant="secondary">{tag}</Badge></li>{/each}</ul>{/if}
+          <div class="flex flex-wrap items-center gap-4">
+            <Label class="check"><NativeCheckbox  bind:checked={ignored} disabled={!!snapshot?.row.transferId}/> Ignore transaction</Label>
+            <Label class="check"><NativeCheckbox  bind:checked={pnl}/> Leave out of income and expense totals</Label>
+            <Label class="check"><NativeCheckbox  bind:checked={flagged}/> Flag</Label>
+            {#if flagged}<Label class="field">Flag due date<Input type="date" bind:value={due}/></Label>{/if}
+          </div>
         </div>
         {#if !snapshot?.row.transferId}
-          <section class="space-y-3 border-t border-line pt-3">
+          <section class={['space-y-3 border-t border-line pt-3', !showFiles && 'max-md:hidden']}>
             <div class="flex items-center justify-between gap-3"><h2 class="section-title">Category splits</h2><Button variant="outline" type="button" onclick={()=>splits=[...splits,{key:crypto.randomUUID(),categoryId:'',value:''}]}>Add split</Button></div>
             {#each splits as split (split.key)}
               <div class="grid items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -305,21 +328,26 @@
             {#if splits.length}<p class="text-sm">Remaining <span class="numeric">{privacy.money(remaining)}</span></p>{/if}
           </section>
         {/if}
-        <div class="flex flex-wrap gap-2">
-          <Button variant="default" type="submit"  disabled={task.busy}>Save transaction</Button>
-          {#if snapshot.row.status==='posted' && snapshot.row.entryKind==='ordinary' && !snapshot.row.transferId && !snapshot.row.ignored && !snapshot.draft.installment}
-            <Button variant="outline" type="button" onclick={()=>openCorrection('void')}>Void transaction</Button>
-            {#if snapshot.row.direction==='credit' && !snapshot.row.categoryId && !snapshot.draft.splits.length}
-              <Button variant="outline" type="button" onclick={()=>openCorrection('refund')}>{audit.value?.some(entry=>entry.action==='refund') ? 'Link refund to purchase' : 'Record as refund'}</Button>
+        <div class="flex flex-wrap gap-2 max-md:grid max-md:grid-cols-2 max-md:[&_button]:px-2 max-md:[&_button]:whitespace-normal">
+          <Button variant="default" type="submit" class={['max-md:col-span-2', selectedSection === 'corrections' && 'max-md:hidden']} disabled={task.busy}>Save transaction</Button>
+          <div class={showCorrections ? 'contents' : 'hidden md:contents'}>
+            {#if canVoid}
+              <Button variant="outline" type="button" onclick={()=>openCorrection('void')}>Void transaction</Button>
+              {#if snapshot.row.direction==='credit' && !snapshot.row.categoryId && !snapshot.draft.splits.length}
+                <Button variant="outline" type="button" onclick={()=>openCorrection('refund')}>{audit.value?.some(entry=>entry.action==='refund') ? 'Link refund to purchase' : 'Record as refund'}</Button>
+              {/if}
             {/if}
-          {/if}
-          {#if snapshot && !snapshot.row.transferId && snapshot.row.entryKind!=='opening'}<Button variant="outline" type="button" onclick={()=>deleting=true}>Delete</Button>{/if}
-          {#if snapshot?.row.status==='projected' && !protectedSource}<Button variant="outline" type="button" onclick={post}>Mark as confirmed</Button>{/if}
+            {#if canRemove}<Button variant="outline" type="button" onclick={()=>deleting=true}>Delete</Button>{/if}
+            {#if canPost}<Button variant="outline" type="button" onclick={post}>Mark as confirmed</Button>{/if}
+          </div>
         </div>
       </Card>
       {/if}
+    {#if selectedSection === 'corrections' && !audit.value?.length && (voided || !canVoid && !canRemove && !canPost)}
+      <Card class="md:hidden">No corrections are available for this transaction.</Card>
+    {/if}
     {#if snapshot}
-      <Card as="section" class="mt-4">
+      <Card as="section" class={['mt-4', !showFiles && 'max-md:hidden']}>
         <div class="mb-3 flex items-center justify-between gap-3"><h2 class="section-title">Attachments</h2><Button variant="outline" onclick={addAttachment} disabled={task.busy}>Add files…</Button></div>
         {#each files.value??[] as file (file.id)}
           <div class="flex flex-wrap items-center gap-2 border-t border-line py-3">

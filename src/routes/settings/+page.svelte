@@ -76,14 +76,20 @@
   }
 </script>
 <Heading title="Settings"><Button variant="outline"  href="/settings/backups">Backups</Button><Button variant="outline"  href="/">Your activity</Button></Heading>
+<nav class="mobile-section-nav mobile-scroll-strip md:hidden" aria-label="Settings sections">
+  <a class="mobile-chip" href="#settings-appearance">Appearance</a>
+  <a class="mobile-chip" href="#settings-calendar-sync">Calendar &amp; Sync</a>
+  <a class="mobile-chip" href="#settings-ledger-app">Ledger &amp; App</a>
+  <a class="mobile-chip" href="#settings-security">Security</a>
+</nav>
 <div class="grid gap-4 lg:grid-cols-2">
-  <Card as="section" class="lg:col-span-2" aria-labelledby="appearance-heading">
+  <Card as="section" id="settings-appearance" class="settings-section lg:col-span-2" aria-labelledby="appearance-heading">
     <h2 id="appearance-heading" class="section-title mb-3">Appearance</h2>
     <ThemeSelector/>
   </Card>
   <FinancialCalendarSettings />
   <StorageSync onLedgerChanged={async () => { await launcher.refresh(); settings.refresh(); }} />
-  <Card as="section" >
+  <Card as="section" id="settings-ledger-app" class="settings-section">
     <h2 class="section-title">Activity settings</h2>
     <Feedback error={settings.error || ledgerTask.error} loading={settings.loading}/>
     {#if settings.value}<form class="mt-3 space-y-4" onsubmit={ledgerSave}>
@@ -114,7 +120,7 @@
       {#if savedApp}<p role="status" class="text-sm text-status">App preferences saved.</p>{/if}
     </form>
   </Card>
-  <Card as="section" class="lg:col-span-2"><h2 class="section-title">Activity protection</h2>
+  <Card as="section" id="settings-security" class="settings-section lg:col-span-2"><h2 class="section-title">Activity protection</h2>
     <p class="my-3 text-sm text-muted-foreground">{session.active?.protection==='encrypted'?'Activity is encrypted':'Activity is unencrypted'}{quick?' · Quick unlock enabled':''}</p>
     <div class="flex flex-wrap gap-2"><Button variant="outline" onclick={()=>open('protection')}>Change protection</Button>{#if session.active?.protection==='encrypted'}<Button variant="outline" onclick={()=>open('keychain')}>{quick?'Disable':'Enable'} quick unlock</Button>{/if}</div>
   </Card>

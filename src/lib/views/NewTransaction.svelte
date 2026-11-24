@@ -1,4 +1,5 @@
 <script lang="ts">
+  import XIcon from '@lucide/svelte/icons/x';
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
@@ -163,9 +164,9 @@
 <Card as="section" class="max-w-3xl max-md:flex max-md:h-dvh max-md:max-w-none max-md:flex-col max-md:rounded-none max-md:border-0 max-md:p-0" aria-labelledby="transaction-step">
   <header class="shrink-0 border-b border-line px-4 pt-(--mobile-safe-top) md:hidden">
     <div class="flex h-14 items-center gap-2">
-      <Button variant="ghost" href="/transactions" aria-label="Close new transaction" class="mobile-icon-button"><NavIcon name="close"/></Button>
-      <h1 class="mr-auto text-base font-semibold">New transaction</h1>
+      <h1 class="text-base font-semibold">New transaction</h1>
       <p aria-label={'Step '+step+' of 3'} class="font-mono text-sm text-muted-foreground">{step}/3</p>
+      <Button variant="ghost" size="icon" href="/transactions" aria-label="Close new transaction" class="ml-auto size-11 shrink-0"><XIcon class="size-4" aria-hidden /></Button>
     </div>
   </header>
   <div bind:this={body} class="max-md:flex max-md:min-h-0 max-md:flex-1 max-md:flex-col max-md:overflow-y-auto max-md:overscroll-contain max-md:p-4">
@@ -197,8 +198,8 @@
             <Button variant="outline" type="button" aria-pressed={target===item.id} onclick={()=>pick(item.id)}
               class="flex min-w-32 snap-start items-start gap-2 rounded-xl p-3 text-left aria-pressed:border-status aria-pressed:bg-ground">
               <AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/>
-              <span class="min-w-0">
-                <span class="block max-w-36 truncate">{item.account.name}</span>
+              <span class="min-w-0 whitespace-normal">
+                <span class="block max-w-36 wrap-anywhere">{item.account.name}</span>
                 <span class="numeric block text-xs text-muted-foreground">{privacy.money(item.balance)}</span>
               </span>
             </Button>

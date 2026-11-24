@@ -18,6 +18,7 @@
     "test:web-driver": "node --disable-warning=ExperimentalWarning tests/web-driver.mjs",
     "precheck": "npm run wasm:build",
     "test:storage-ui": "node --disable-warning=ExperimentalWarning tests/storage-ui.mjs",
+    "test:financial-planning-ui": "node tests/financial-planning-ui.mjs",
     "preview": "vite preview",
     "test:calculator": "node --experimental-strip-types --test tests/calculator.test.mjs"
   },

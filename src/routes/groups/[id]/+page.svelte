@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
+  const mobile = new MediaQuery('(width < 48rem)');
   const modalForm = $props.id();
   import { goto } from '$app/navigation';
   import RowActions from '#lib/components/RowActions.svelte';
@@ -78,6 +80,30 @@
     });
   }
 </script>
+{#snippet paybackActions(row: Settlement_Serialize, archived: boolean)}
+  <RowActions itemName={'payback on '+privacy.date(row.draft.date)} onEdit={archived ? undefined : ()=>settlement(row)}
+        onDelete={archived ? undefined : ()=>remove('settlement',row.id)} extraActions={row.draft.transactionId ?
+          [{id:'transaction',label:'View transaction',onclick:()=>void goto('/transactions/'+row.draft.transactionId)}] : []}/>
+{/snippet}
+{#snippet expenseActions(row: Expense_Serialize, archived: boolean)}
+  <RowActions itemName={row.description} onEdit={archived ? undefined : ()=>expense(row)}
+        onDelete={archived ? undefined : ()=>remove('expense',row.id)} extraActions={row.transactionId ?
+          [{id:'transaction',label:'View transaction',onclick:()=>void goto('/transactions/'+row.transactionId)}] : []}/>
+{/snippet}
+{#snippet allocation(row: Expense_Serialize)}
+  <Popover.Root>
+    <Popover.Trigger>
+      {#snippet child({ props })}<Button {...props} variant="ghost" aria-label={'Allocation for '+row.description}>{row.method} · {row.shares.length}</Button>{/snippet}
+    </Popover.Trigger>
+    <Popover.Content align="start" class="max-w-[calc(100vw-2rem)]">
+      <ul class="divide-y">
+        {#each row.shares as share (share.memberId)}
+          <li class="flex justify-between gap-2 py-2"><span>{label(share.memberId)}</span><span class="numeric">{privacy.money({currency:row.amount.currency,minor:share.minor})}</span></li>
+        {/each}
+      </ul>
+    </Popover.Content>
+  </Popover.Root>
+{/snippet}
 <Heading title={data.value?.group.name??'Shared group'}>
   <Button variant="outline"  href="/groups">All groups</Button>
   <Label class="field">As of<Input type="date" bind:value={asOf}/></Label>
@@ -103,30 +129,56 @@
         onDelete={row.draft.isSelf ? undefined : ()=>remove('member',row.id)}/>{/if}</li>{/each}</ul>
     </Card>
   </div>
-  <Card as="section" class="mb-5"><h2 class="section-title mb-3">Expenses</h2><div class="table-scroll"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Expense</TableHead><TableHead>Paid by</TableHead><TableHead>Amount</TableHead><TableHead>Shares</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+  <Card as="section" class="mb-5"><h2 class="section-title mb-3">Expenses</h2>
+    {#if !mobile.current}
+    <div class="table-scroll hidden md:block"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Expense</TableHead><TableHead>Paid by</TableHead><TableHead>Amount</TableHead><TableHead>Shares</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
     {#each data.value.expenses as row (row.id)}
-      <TableRow><TableCell>{privacy.date(row.date)}</TableCell><TableHead scope="row">{#if row.transactionId}<a class="mobile-touch-link" href={'/transactions/'+row.transactionId}>{row.description}</a>{:else}{row.description}{/if}</TableHead><TableCell>{label(row.payerId)}</TableCell><TableCell class="numeric">{privacy.money(row.amount)}</TableCell><TableCell><Popover.Root>
-        <Popover.Trigger>
-          {#snippet child({ props })}<Button {...props} variant="ghost" aria-label={'Allocation for '+row.description}>{row.method} · {row.shares.length}</Button>{/snippet}
-        </Popover.Trigger>
-        <Popover.Content align="start" class="max-w-[calc(100vw-2rem)]">
-          <ul class="divide-y">{#each row.shares as share (share.memberId)}
-            <li class="flex justify-between gap-2 py-2"><span>{label(share.memberId)}</span><span class="numeric">{privacy.money({currency:row.amount.currency,minor:share.minor})}</span></li>
-          {/each}</ul>
-        </Popover.Content>
-      </Popover.Root></TableCell><TableCell class="text-right"><RowActions itemName={row.description} onEdit={archived ? undefined : ()=>expense(row)}
-        onDelete={archived ? undefined : ()=>remove('expense',row.id)} extraActions={row.transactionId ?
-          [{id:'transaction',label:'View transaction',onclick:()=>void goto('/transactions/'+row.transactionId)}] : []}/></TableCell></TableRow>
+      <TableRow><TableCell>{privacy.date(row.date)}</TableCell><TableHead scope="row">{#if row.transactionId}<a class="mobile-touch-link" href={'/transactions/'+row.transactionId}>{row.description}</a>{:else}{row.description}{/if}</TableHead><TableCell>{label(row.payerId)}</TableCell><TableCell class="numeric">{privacy.money(row.amount)}</TableCell><TableCell>{@render allocation(row)}</TableCell><TableCell class="text-right">{@render expenseActions(row, archived)}</TableCell></TableRow>
     {:else}<TableRow><TableCell colspan={6}>No expenses recorded.</TableCell></TableRow>{/each}
-  </TableBody></Table></div></Card>
-  <Card as="section" ><h2 class="section-title mb-3">Paybacks</h2><div class="table-scroll"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Amount</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+  </TableBody></Table></div>
+    {:else}
+    <ul class="space-y-2 md:hidden" aria-label="Expenses">
+      {#each data.value.expenses as row (row.id)}
+        <li class="space-y-2 rounded-lg border border-line p-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            {#if row.transactionId}
+              <a class="mobile-touch-link font-medium underline" href={'/transactions/'+row.transactionId}>{row.description}</a>
+            {:else}<span class="font-medium wrap-anywhere">{row.description}</span>{/if}
+            <span class="numeric">{privacy.money(row.amount)}</span>
+          </div>
+          <p class="text-sm text-muted-foreground">{privacy.date(row.date)} · Paid by {label(row.payerId)}</p>
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            {@render allocation(row)}
+            {@render expenseActions(row, archived)}
+          </div>
+        </li>
+      {:else}<li>No expenses recorded.</li>{/each}
+    </ul>
+    {/if}
+  </Card>
+  <Card as="section" ><h2 class="section-title mb-3">Paybacks</h2>
+    {#if !mobile.current}
+    <div class="table-scroll hidden md:block"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Amount</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
     {#each data.value.settlements as row (row.id)}
       <TableRow><TableCell>{privacy.date(row.draft.date)}</TableCell><TableCell>{label(row.draft.fromMemberId)}</TableCell><TableCell>{label(row.draft.toMemberId)}</TableCell><TableCell class="numeric">{privacy.money(row.draft.amount)}</TableCell>
-      <TableCell class="text-right"><RowActions itemName={'payback on '+privacy.date(row.draft.date)} onEdit={archived ? undefined : ()=>settlement(row)}
-        onDelete={archived ? undefined : ()=>remove('settlement',row.id)} extraActions={row.draft.transactionId ?
-          [{id:'transaction',label:'View transaction',onclick:()=>void goto('/transactions/'+row.draft.transactionId)}] : []}/></TableCell></TableRow>
+      <TableCell class="text-right">{@render paybackActions(row, archived)}</TableCell></TableRow>
     {:else}<TableRow><TableCell colspan={5}>No paybacks yet.</TableCell></TableRow>{/each}
-  </TableBody></Table></div></Card>
+  </TableBody></Table></div>
+    {:else}
+    <ul class="space-y-2 md:hidden" aria-label="Paybacks">
+      {#each data.value.settlements as row (row.id)}
+        <li class="space-y-1 rounded-lg border border-line p-3">
+          <p class="font-medium wrap-anywhere">{label(row.draft.fromMemberId)} → {label(row.draft.toMemberId)}</p>
+          <p class="text-sm text-muted-foreground">{privacy.date(row.draft.date)}</p>
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            <span class="numeric">{privacy.money(row.draft.amount)}</span>
+            {@render paybackActions(row, archived)}
+          </div>
+        </li>
+      {:else}<li>No paybacks yet.</li>{/each}
+    </ul>
+    {/if}
+  </Card>
 {/if}
 {#if mode==='group' && data.value}<GroupSettings group={data.value.group} self={self?.draft.label} close={()=>mode=null} saved={()=>{mode=null;data.refresh();}}/>
 {:else if mode}

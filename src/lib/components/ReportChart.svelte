@@ -45,7 +45,7 @@
             {@const height=value<0n?-value*zero/ceiling:value*(100n-zero)/ceiling}
             {@const mark={...item,date:point.date}}
             {@const key=point.date+'-'+item.label}
-            <div class="relative min-w-1 max-w-12 flex-1 self-stretch">
+            <div class="relative min-w-1 max-w-12 flex-1 self-stretch max-md:max-w-10">
               {#if signs.negative&&signs.positive}<span aria-hidden="true" class="absolute inset-x-0 border-t border-muted-foreground/40" style:bottom={zero+'%'}></span>{/if}
               <Button variant="outline" style={`height:${height}%;${value>=0n?`bottom:${zero}%`:`top:${100n-zero}%`}`} type="button" data-mark={key} tabindex={focused===key || focused===null && point===firstMark && item===point.values[0] ? 0 : -1}
                 aria-label={info(mark)} title={info(mark)} aria-describedby={active?.date===point.date&&active.label===item.label?chartId:undefined}
@@ -62,7 +62,8 @@
   {:else}<p class="text-sm text-muted-foreground">No activity in this period.</p>{/if}
 </section>
 <style>
-  :global(.chart-bar) {
+  :global(.chart-bar[data-mark]) {
+    min-width: 0;
     min-height: 3px;
     padding: 0;
     border: none;
