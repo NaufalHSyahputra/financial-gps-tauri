@@ -362,8 +362,8 @@ pub fn get(ctx: &Context<'_>, id: &str, as_of: Option<&str>) -> Result<Asset> {
     let holding = replay(&draft.currency, &trades(ctx, id)?, as_of)?;
     let unrealized = money(
         &draft.currency,
-        crate::ledger_engine::fx::minor_i128(&value.minor)?
-            .checked_sub(crate::ledger_engine::fx::minor_i128(
+        crate::ledger_engine::currency::minor_i128(&value.minor)?
+            .checked_sub(crate::ledger_engine::currency::minor_i128(
                 &holding.cost_basis.minor,
             )?)
             .ok_or_else(overflow)?,
@@ -676,7 +676,7 @@ pub fn group_detail(
     group: AssetGroup,
     as_of: Option<&str>,
 ) -> Result<AssetGroupDetail> {
-    use crate::ledger_engine::fx::{ConversionStatus, Resolver, minor_i128};
+    use crate::ledger_engine::currency::{ConversionStatus, Resolver, minor_i128};
     let date = as_of.map(parse_date).transpose()?.unwrap_or(ctx.today);
     let as_of = date.to_string();
     let target = accounts::settings(ctx)?.display_currency;

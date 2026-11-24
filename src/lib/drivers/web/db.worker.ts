@@ -2,8 +2,8 @@ import initEngine, { WebEngine, derive_key, initialize_ledger, verify_ledger, up
 import type * as C from '../contracts';
 import type {
   AppPreferences_Serialize, CreateRequest_Deserialize, LedgerDescriptor, LedgerSession,
-  Mutation_Deserialize, OpenRequest_Deserialize, OpenResult_Serialize, PathGrant, PathPurpose,
-  Scope, SetStorageMode, TursoCredentials, UnlockRequest_Deserialize
+  Mutation_Deserialize, OpenRequest_Deserialize, OpenResult_Serialize,
+  Scope, UnlockRequest_Deserialize
 } from '../contracts';
 import { Opfs, sqlPort, type SqliteDb } from './opfs';
 import { asError, issue } from './errors';
@@ -12,6 +12,9 @@ import { assemble, checkImage, copyRelations, disassemble, isPopulated, sha256, 
 import { Sync, endpoint, stateKey, type Binding, type SyncReplica } from './sync';
 import type { Request, Response } from './protocol';
 import { Jobs, type JobObserver } from './jobs';
+import { dispatchDomain, dispatchWorker, jobKinds, type RequestArgs } from './worker-dispatch';
+import { WorkerGrants, noFile, type Grant } from './worker-grants';
+import { backupSecretSlot, getSchedule, runSchedule, writeSchedule } from './worker-schedule';
 import { encodeBackup, decodeBackup } from './backup';
 
 const send = (value: Response, transfers: Transferable[] = []) => self.postMessage(value, { transfer: transfers });
@@ -20,12 +23,9 @@ const stale = () => issue('StaleSession', 'stale_ledger_session');
 const unauthorized = () => issue('BadCredentialOrCorrupt', 'bad_credential_or_corrupt');
 const text = new TextEncoder();
 const decodeText = new TextDecoder();
-const noFile = () => issue('Validation', 'invalid_input', { grant: 'invalid_or_expired_path_grant' });
 
 type Profile = LedgerDescriptor & { salt?: number[]; uuid: string; storageId?: string };
 type Active = { entry: Profile; db: SqliteDb; scope: Scope; key?: CryptoKey };
-type Grant = { item: PathGrant; file?: File; expires: number };
-type RequestArgs = Record<string, unknown>;
 
 class Queue {
   private tail: Promise<unknown> = Promise.resolve();
@@ -61,7 +61,7 @@ class WorkerRuntime implements SyncReplica {
     value => send({ type: 'event', name: 'ledgerJobProgress', value }),
     (id, scope, control) => send({ type: 'job-control', id, scope, control })
   );
-  private readonly grants = new Map<string, Grant>();
+  readonly grants = new WorkerGrants();
   private readonly requests = new Map<string, { reference: string; result: OpenResult_Serialize }>();
   private profiles: Profile[] = [];
   private readonly epoch = crypto.randomUUID();
@@ -93,23 +93,6 @@ class WorkerRuntime implements SyncReplica {
         }).catch(() => {});
       }
     }, 15_000);
-  }
-
-  grant(purpose: PathPurpose, name: string, file?: File): PathGrant {
-    const time = Date.now();
-    for (const [id, value] of this.grants) if (value.expires < time) this.grants.delete(id);
-    const expires = time + 300_000;
-    const item = { id: crypto.randomUUID(), purpose, displayName: name, expiresAt: new Date(expires).toISOString() };
-    if (this.grants.size >= 256) throw issue('Busy', 'ledger_busy');
-    this.grants.set(item.id, { item, file, expires });
-    return item;
-  }
-
-  private consume(purpose: PathPurpose, id: string) {
-    const grant = this.grants.get(id);
-    if (!grant || grant.item.purpose !== purpose || grant.expires <= Date.now()) throw noFile();
-    this.grants.delete(id);
-    return grant;
   }
 
   private async saveProfiles(profiles: Profile[]) {
@@ -170,7 +153,7 @@ class WorkerRuntime implements SyncReplica {
     if (protectedLedger !== !!input.credential || (!protectedLedger && input.rememberKey)) {
       throw issue('Validation', 'invalid_input', { credential: 'invalid_credential_options' });
     }
-    const grant = input.destination ? this.consume('ledgerCreate', input.destination) : undefined;
+    const grant = input.destination ? this.grants.consume('ledgerCreate', input.destination) : undefined;
     const id = crypto.randomUUID();
     const salt = protectedLedger ? crypto.getRandomValues(new Uint8Array(16)) : undefined;
     const entry: Profile = {
@@ -229,7 +212,7 @@ class WorkerRuntime implements SyncReplica {
     }
     let entry: Profile | undefined;
     if (input.openGrant && !input.ledgerInstanceId) {
-      const file = this.consume('ledgerOpen', input.openGrant).file;
+      const file = this.grants.consume('ledgerOpen', input.openGrant).file;
       if (!file || file.size > 400 * 1024 * 1024) throw noFile();
       if (decodeText.decode(await file.slice(0, 8).arrayBuffer()) === 'FINGPSBK') {
         this.closeActive();
@@ -311,70 +294,35 @@ class WorkerRuntime implements SyncReplica {
     }
   }
 
-  private async executeCore(command: string, args: RequestArgs, write = Boolean(args.mutation)) {
-    const scope = (args.mutation as Mutation_Deserialize | undefined)?.scope ?? args.scope as Scope;
-    const active = this.require(scope);
-    const port = sqlPort(this.opfs.sqlite, active.db);
-    const data: unknown = JSON.parse(this.engine.execute(port, command, JSON.stringify(args)));
-    if (write) await this.persist(active);
-    return data;
-  }
-
   private output(grant: Grant, bytes: Uint8Array<ArrayBuffer>, media: string, open = false) {
     send({ type: 'file', grant: grant.item.id, name: grant.item.displayName, bytes, media, open }, [bytes.buffer]);
   }
 
-  async invoke(command: string, args: RequestArgs): Promise<unknown> {
-    if (command.startsWith('import_') || command.startsWith('fx_')) throw issue('Conflict', 'feature_unavailable');
-    const scope = args.scope as Scope;
-    switch (command) {
-      case 'job_status': {
-        if (scope) this.require(scope);
-        return this.jobs.get(String(args.id), scope).status;
-      }
-      case 'job_cancel': {
-        if (scope) this.require(scope);
-        return this.jobs.cancel(String(args.id), scope);
-      }
-      case 'turso_credentials_validate': {
-        const credentials = args.input as TursoCredentials;
-        endpoint(credentials.url);
-        await this.sync.validate(credentials);
-        return null;
-      }
-      case 'ledger_storage_mode_set': {
-        const input = args.input as SetStorageMode;
-        if (input.mode === 'turso-sync') endpoint(input.url);
-        return this.sync.set(scope, input);
-      }
-      case 'ledger_sync_probe_saved': await this.sync.probeSaved(scope); return null;
-      case 'ledger_sync_status': return this.sync.status(scope);
-      case 'ledger_sync_now': return this.sync.run(scope);
-      case 'ledger_sync_publish_local': return this.sync.run(scope, { generation: args.expectedRemoteGeneration as string });
-      case 'ledger_sync_accept_remote': {
-        const input = args.input as { expectedRemoteGeneration: string; expectedLocalVersion: string };
-        return this.sync.run(scope, { generation: input.expectedRemoteGeneration, discardVersion: input.expectedLocalVersion });
-      }
-      default: return this.queue.run(() => this.local(command, args));
-    }
+  invoke(command: string, args: RequestArgs) {
+    return dispatchWorker(command, args, {
+      jobs: this.jobs, sync: this.sync, requireScope: scope => this.require(scope),
+      local: (name, input) => this.queue.run(() => this.local(name, input))
+    });
+  }
+
+  private executeCore(command: string, args: RequestArgs, write = Boolean(args.mutation)) {
+    return dispatchDomain(command, args, write, this.engine, this.opfs, scope => this.require(scope), active => this.persist(active));
   }
 
   private async local(command: string, args: RequestArgs) {
     switch (command) {
       case 'attachments_list': case 'attachment_rename': case 'attachment_delete':
       case 'attachment_save_as': case 'attachment_open': return this.attachments(command, args);
-      case 'import_preview_start': case 'import_commit_start': case 'rule_preview_start': case 'rule_apply_start':
-      case 'transactions_export_start': case 'fx_refresh_start': case 'attachment_add_start':
+      case 'rule_preview_start': case 'rule_apply_start':
+      case 'transactions_export_start': case 'attachment_add_start':
       case 'backup_create_start': case 'restore_preview_start': case 'restore_apply_start':
       case 'ledger_change_protection': return this.start(command, args);
-      case 'import_template_file':
       case 'rule_pack_transfer': {
-        const input = args.input as C.TemplateFile | C.RulePackTransfer_Deserialize;
+        const input = args.input as C.RulePackTransfer_Deserialize;
         const reading = input.direction === 'import';
-        const purpose = command === 'import_template_file' ? reading ? 'templateRead' : 'templateWrite' : reading ? 'rulePackRead' : 'rulePackWrite';
-        const grant = this.consume(purpose, input.grant);
-        const limit = command === 'import_template_file' ? 128 * 1024 : 1024 * 1024;
-        if (grant.file && grant.file.size > limit) throw issue('Validation', 'file_size_limit');
+        const purpose = reading ? 'rulePackRead' : 'rulePackWrite';
+        const grant = this.grants.consume(purpose, input.grant);
+        if (grant.file && grant.file.size > 1024 * 1024) throw issue('Validation', 'file_size_limit');
         return this.coreFile(command, args, grant, 'application/octet-stream', reading);
       }
       case 'backup_list': return this.listBackups(this.require(args.scope as Scope), args.input as C.PageQuery);
@@ -382,7 +330,7 @@ class WorkerRuntime implements SyncReplica {
         const mutation = args.mutation as Mutation_Deserialize;
         return this.removeBackup(this.require(mutation.scope), mutation, args.input as C.ConfirmedId_Deserialize);
       }
-      case 'backup_schedule_get': return this.getSchedule(this.require(args.scope as Scope));
+      case 'backup_schedule_get': return getSchedule(this.require(args.scope as Scope));
       case 'backup_schedule_set': {
         const mutation = args.mutation as Mutation_Deserialize;
         return this.setSchedule(this.require(mutation.scope), mutation, args.input as C.BackupScheduleSet_Deserialize);
@@ -423,14 +371,14 @@ class WorkerRuntime implements SyncReplica {
         this.prefs = prefs;
         return prefs;
       }
-      default: return this.executeCore(command, args, Boolean(args.mutation) || command === 'fx_provider_configure');
+      default: return this.executeCore(command, args, Boolean(args.mutation));
     }
   }
 
   private async coreFile(command: string, args: RequestArgs, grant: Grant, media: string, write: boolean, observer?: JobObserver) {
     const scope = (args.mutation as Mutation_Deserialize | undefined)?.scope ?? args.scope as Scope;
     const active = this.require(scope);
-    if (grant.file && grant.file.size > 50 * 1024 * 1024) throw issue('Validation', 'statement_size_limit');
+    if (grant.file && grant.file.size > 50 * 1024 * 1024) throw issue('Validation', 'file_size_limit');
     const bytes = grant.file ? new Uint8Array(await grant.file.arrayBuffer()) : new Uint8Array();
     const data = JSON.parse(this.engine.execute_file(sqlPort(this.opfs.sqlite, active.db), command, JSON.stringify(args), grant.item.displayName, bytes, observer));
     if (write) await this.persist(active);
@@ -496,7 +444,7 @@ class WorkerRuntime implements SyncReplica {
     }
     const staged: { id: string; file: File; bytes: Uint8Array<ArrayBuffer>; mime: string; digest: string }[] = [];
     for (const id of input.grants) {
-      const file = this.consume('attachmentRead', id).file;
+      const file = this.grants.consume('attachmentRead', id).file;
       if (!file || file.size === 0 || file.size > 10_000_000) throw issue('Validation', 'attachment_size_limit');
       const bytes = new Uint8Array(await file.arrayBuffer());
       const mime = attachmentType(file.name, bytes);
@@ -552,7 +500,7 @@ class WorkerRuntime implements SyncReplica {
     const bytes = await this.readAttachment(active.entry, active.key, input.id);
     if (before.digest !== await sha256(bytes)) throw issue('Integrity', 'attachment_hash_mismatch');
     if (command === 'attachment_save_as') {
-      const grant = this.consume('attachmentWrite', input.saveGrant);
+      const grant = this.grants.consume('attachmentWrite', input.saveGrant);
       this.output(grant, bytes, before.mediaType);
       return { fileName: grant.item.displayName, rowCount: '1', revision: this.info(active).revision };
     }
@@ -566,29 +514,22 @@ class WorkerRuntime implements SyncReplica {
     const scope = mutation?.scope ?? args.scope as Scope | undefined;
     if (scope) this.require(scope);
     const input = args.input as Record<string, unknown>;
-    const kinds = {
-      import_preview_start: 'importPreview', import_commit_start: 'importCommit', rule_preview_start: 'rulePreview',
-      rule_apply_start: 'ruleApply', transactions_export_start: 'transactionsExport', fx_refresh_start: 'fxRefresh',
-      attachment_add_start: 'attachmentAdd', backup_create_start: 'backupCreate', restore_preview_start: 'restorePreview',
-      restore_apply_start: 'restoreApply', ledger_change_protection: 'ledgerChangeProtection'
-    } as const;
-    const kind = kinds[command as keyof typeof kinds];
+    const kind = jobKinds[command as keyof typeof jobKinds];
     const ticketScope = ['restorePreview', 'restoreApply', 'ledgerChangeProtection'].includes(kind) ? undefined : scope;
     return this.jobs.start(ticketScope, kind, kind, async (_signal, observer) => {
       const publish = () => { if (!observer.publishing()) throw issue('Cancelled', 'operation_cancelled'); };
       return this.queue.run(async () => {
         if (observer.cancelled()) throw issue('Cancelled', 'operation_cancelled');
         switch (command) {
-          case 'import_preview_start': return this.coreFile(command, args, this.consume('statementImport', String(input.fileGrant)), '', false, observer);
           case 'transactions_export_start': {
-            const target = this.consume('transactionExport', String(input.saveGrant));
+            const target = this.grants.consume('transactionExport', String(input.saveGrant));
             return this.coreFile(command, args, target, 'text/csv', false, observer);
           }
           case 'attachment_add_start': return this.addAttachments(this.require(scope), mutation!, input as unknown as C.AttachmentAdd, publish);
           case 'backup_create_start': {
             const active = this.require(scope);
             const request = input as unknown as C.BackupCreate_Deserialize;
-            const grant = request.destination ? this.consume('backupWrite', request.destination) : undefined;
+            const grant = request.destination ? this.grants.consume('backupWrite', request.destination) : undefined;
             publish();
             return this.createBackup(active, request.backupPassphrase, grant);
           }
@@ -679,7 +620,7 @@ class WorkerRuntime implements SyncReplica {
   private async previewRestore(scope: Scope | undefined, input: C.RestorePreviewRequest_Deserialize) {
     if (Boolean(input.fileGrant) === Boolean(input.scopedBackupId)) throw issue('Validation', 'backup_source_required');
     const file = input.fileGrant
-      ? this.consume('restoreRead', input.fileGrant).file
+      ? this.grants.consume('restoreRead', input.fileGrant).file
       : await this.opfs.read(this.backupName(this.require(scope).entry, input.scopedBackupId!));
     if (!file || file.size > 400 * 1024 * 1024) throw issue('Validation', 'archive_size_limit');
     const { manifest, image } = await decodeBackup(this.opfs, new Uint8Array(await file.arrayBuffer()), input.backupPassphrase);
@@ -813,12 +754,6 @@ class WorkerRuntime implements SyncReplica {
       () => ({ protection: entry.protection, quickUnlock: entry.quickUnlock }));
   }
 
-  private getSchedule(active: Active): C.BackupSchedule_Serialize {
-    const json = active.db.selectValue("SELECT value_json FROM ledger_settings WHERE key='backup.schedule'");
-    return typeof json === 'string' ? JSON.parse(json) :
-      { schedule: null, remembered: false, lastAttempt: null, lastSuccess: null, error: null, destinationName: null };
-  }
-
   private async setSchedule(active: Active, mutation: Mutation_Deserialize, input: C.BackupScheduleSet_Deserialize) {
     if (mutation.expectedRevision != null && mutation.expectedRevision !== this.info(active).revision) throw issue('StaleRevision', 'stale_ledger_revision');
     if (input.schedule && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.schedule.localTime)
@@ -828,14 +763,14 @@ class WorkerRuntime implements SyncReplica {
       throw issue('Validation', 'invalid_backup_schedule');
     }
     if (input.destinationGrant && !input.schedule) throw issue('Validation', 'schedule_required');
-    const grant = input.destinationGrant ? this.consume('backupDirectory', input.destinationGrant) : undefined;
+    const grant = input.destinationGrant ? this.grants.consume('backupDirectory', input.destinationGrant) : undefined;
     if (Boolean(input.rememberSecret) !== Boolean(input.backupPassphrase)) throw issue('Validation', 'backup_credential_option_conflict');
-    const slot = secretSlot(active.entry, 'backup');
+    const slot = backupSecretSlot(active.entry);
     if (input.rememberSecret) {
       const value = text.encode(input.backupPassphrase!);
       try { await this.vault.store(slot, value); } finally { value.fill(0); }
     } else if (input.rememberSecret === false) await this.vault.revoke(slot);
-    const previous = this.getSchedule(active);
+    const previous = getSchedule(active);
     const changed = JSON.stringify(previous.schedule) !== JSON.stringify(input.schedule ?? null) || previous.destinationName !== (grant?.item.displayName ?? null);
     const status: C.BackupSchedule_Serialize = {
       schedule: input.schedule ? { ...input.schedule, weekday: input.schedule.weekday ?? null, retainDays: input.schedule.retainDays ?? null } : null,
@@ -843,7 +778,7 @@ class WorkerRuntime implements SyncReplica {
       lastSuccess: changed ? null : previous.lastSuccess, destinationName: grant?.item.displayName ?? null
     };
     return this.versioned(active, 'backup_schedule_set', mutation, { ...input, backupPassphrase: undefined }, ['backups'], () => {
-      this.writeSchedule(active, status);
+      writeSchedule(active, status);
       active.db.exec({
         sql: "INSERT INTO ledger_settings VALUES('backup.browser_destination',?1) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json",
         bind: [JSON.stringify(grant?.item.id ?? null)]
@@ -853,60 +788,13 @@ class WorkerRuntime implements SyncReplica {
     });
   }
 
-  private writeSchedule(active: Active, status: C.BackupSchedule_Serialize) {
-    active.db.exec({
-      sql: "INSERT INTO ledger_settings VALUES('backup.schedule',?1) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json",
-      bind: [JSON.stringify(status)]
+  private runSchedule(active: Active) {
+    return runSchedule(active, {
+      records: this.records, opfs: this.opfs, vault: this.vault,
+      createBackup: (ledger, password) => this.createBackup(ledger, password),
+      backupName: (entry, id) => this.backupName(entry, id),
+      backups: entry => this.backups(entry), persist: ledger => this.persist(ledger)
     });
-  }
-
-  private async runSchedule(active: Active) {
-    const status = this.getSchedule(active);
-    const schedule = status.schedule;
-    if (!schedule) return;
-    const timezone = active.db.selectValue('SELECT timezone_override FROM ledger_meta');
-    const clock = new Intl.DateTimeFormat('sv', {
-      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-      hourCycle: 'h23', timeZone: typeof timezone === 'string' ? timezone : undefined
-    });
-    const [today, time] = clock.format(new Date()).split(' ');
-    const date = new Date(`${today}T00:00:00Z`);
-    const weekday = (date.getUTCDay() + 6) % 7 + 1;
-    const days = schedule.weekday == null ? 0 : (weekday - schedule.weekday + 7) % 7;
-    date.setUTCDate(date.getUTCDate() - days - (days === 0 && time < schedule.localTime ? schedule.weekday == null ? 1 : 7 : 0));
-    const token = date.toISOString().slice(0, 10) + 'T' + schedule.localTime;
-    if (active.db.selectValue("SELECT value_json FROM ledger_settings WHERE key='backup.browser_run'") === JSON.stringify(token)) return;
-    status.lastAttempt = now();
-    try {
-      const secret = await this.vault.retrieve(secretSlot(active.entry, 'backup'));
-      if (!secret) throw issue('Validation', 'credential_required');
-      const password = decodeText.decode(secret);
-      secret.fill(0);
-      const backup = await this.createBackup(active, password);
-      const target = active.db.selectValue("SELECT value_json FROM ledger_settings WHERE key='backup.browser_destination'");
-      const handle = typeof target === 'string' && JSON.parse(target) ? await this.records.get<FileSystemDirectoryHandle>(`backup-directory:${JSON.parse(target)}`) : undefined;
-      if (handle) {
-        const dest = await handle.getFileHandle(backup.fileName, { create: true });
-        const out = await dest.createWritable();
-        await out.write(await this.opfs.read(this.backupName(active.entry, backup.id)));
-        await out.close();
-      }
-      status.lastSuccess = now();
-      status.error = null;
-      if (schedule.retainDays) {
-        const cutoff = Date.now() - schedule.retainDays * 86400_000;
-        const list = await this.backups(active.entry);
-        const expired = list.filter(item => Date.parse(item.createdAt) < cutoff);
-        for (const item of expired) await this.opfs.remove(this.backupName(active.entry, item.id)).catch(() => {});
-        if (expired.length) await this.records.set(`backups:${active.entry.ledgerInstanceId}`, list.filter(item => !expired.includes(item)));
-      }
-    } catch (error) { status.error = asError(error).messageKey; }
-    this.writeSchedule(active, status);
-    active.db.exec({
-      sql: "INSERT INTO ledger_settings VALUES('backup.browser_run',?1) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json",
-      bind: [JSON.stringify(token)]
-    });
-    await this.persist(active);
   }
 
   private readBinding(db: SqliteDb): Binding | null {
@@ -1063,7 +951,7 @@ self.addEventListener('message', (event: MessageEvent<Request>) => {
     }
     if (!runtime) throw issue('Io', 'browser_engine_not_initialized');
     const host = await runtime;
-    if (request.type === 'grant') return host.grant(request.purpose, request.name, request.file);
+    if (request.type === 'grant') return host.grants.issue(request.purpose, request.name, request.file);
     return host.invoke(request.command, request.args);
   }
   void handle().then(

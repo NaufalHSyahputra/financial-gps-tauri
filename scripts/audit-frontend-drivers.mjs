@@ -39,7 +39,8 @@ const routes = new Set([
   'file_choose',
   ...[...source('crates/core-engine/src/commands.rs').matchAll(/scoped_(?:read|write)!\(\s*(\w+)/g)].map(match => match[1]),
   ...[...source('crates/web-engine/src/extras.rs').matchAll(/"(\w+)"\s*=>/g)].map(match => match[1]),
-  ...[...source('src/lib/drivers/web/db.worker.ts').matchAll(/case '(\w+)':/g)].map(match => match[1])
+  ...['db.worker.ts', 'worker-dispatch.ts'].flatMap(file =>
+    [...source(`src/lib/drivers/web/${file}`).matchAll(/case '(\w+)':/g)].map(match => match[1]))
 ]);
 const absent = registry.filter(operation => !routes.has(operation));
 if (absent.length) {

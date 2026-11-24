@@ -48,9 +48,6 @@ impl Desktop {
             Some("asset" | "assets") => Feature::Assets,
             Some("recurring") => Feature::Recurring,
             Some("group" | "groups") => Feature::SharedGroups,
-            Some("fx" | "import") => {
-                return Err(AppError::new(ErrorCode::Conflict, "feature_unavailable"));
-            }
             _ => return Ok(()),
         };
         self.ledgers()?.require_feature(module)
@@ -192,9 +189,6 @@ async fn file_choose<R: Runtime>(
         PathPurpose::LedgerOpen => ("Activity file", &["db"], None),
         PathPurpose::LedgerCreate => ("Activity file", &["db"], Some("ledger.db")),
         PathPurpose::TransactionExport => ("Transaction CSV", &["csv"], Some("transactions.csv")),
-        PathPurpose::StatementImport | PathPurpose::TemplateRead | PathPurpose::TemplateWrite => {
-            return Err(AppError::new(ErrorCode::Conflict, "feature_unavailable"));
-        }
         PathPurpose::RulePackRead => ("Categorization rules", &["json"], None),
         PathPurpose::RulePackWrite => ("Categorization rules", &["json"], Some("rules.json")),
         PathPurpose::AttachmentRead => (
@@ -483,25 +477,11 @@ macro_rules! commands {
                 phase_three::payee_delete::<$runtime>,
                 phase_three::payee_merge::<$runtime>,
                 phase_three::currencies_list::<$runtime>,
-                phase_three::fx_convert::<$runtime>,
-                phase_three::fx_rates_list::<$runtime>,
-                phase_three::fx_rate_save::<$runtime>,
-                phase_three::fx_rate_delete::<$runtime>,
                 phase_three::dashboard_get::<$runtime>,
                 phase_three::report_get::<$runtime>,
                 phase_three::calendar_get::<$runtime>,
                 phase_three::search_global::<$runtime>,
-                phase_three::fx_provider_configure::<$runtime>,
-                phase_three::fx_refresh_start::<$runtime>,
                 phase_three::transactions_export_start::<$runtime>,
-                phase_four::import_templates_list::<$runtime>,
-                phase_four::import_template_save::<$runtime>,
-                phase_four::import_template_delete::<$runtime>,
-                phase_four::import_preview_page::<$runtime>,
-                phase_four::import_batches_list::<$runtime>,
-                phase_four::import_batch_get::<$runtime>,
-                phase_four::import_undo_preview::<$runtime>,
-                phase_four::import_undo_apply::<$runtime>,
                 phase_four::rules_list::<$runtime>,
                 phase_four::rule_get::<$runtime>,
                 phase_four::rule_save::<$runtime>,
@@ -531,11 +511,8 @@ macro_rules! commands {
                 phase_four::asset_valuation_delete::<$runtime>,
                 phase_four::asset_trade_save::<$runtime>,
                 phase_four::asset_trade_delete::<$runtime>,
-                phase_four::import_preview_start::<$runtime>,
-                phase_four::import_commit_start::<$runtime>,
                 phase_four::rule_preview_start::<$runtime>,
                 phase_four::rule_apply_start::<$runtime>,
-                phase_four::import_template_file::<$runtime>,
                 phase_four::rule_pack_transfer::<$runtime>,
                 phase_four::attachments_list::<$runtime>,
                 phase_four::attachment_rename::<$runtime>,

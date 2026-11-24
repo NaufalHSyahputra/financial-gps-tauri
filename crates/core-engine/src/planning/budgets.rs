@@ -3,7 +3,7 @@ use crate::sql::{OptionalExtension, params, params_from_iter};
 use crate::{
     domain::{Result, parse_date},
     ledger_engine::{
-        fx::{self, ConversionStatus, Resolver},
+        currency::{self, ConversionStatus, Resolver},
         transactions as tx, *,
     },
 };
@@ -85,7 +85,7 @@ impl<'ctx, 'tx> Calculator<'ctx, 'tx> {
         value.prior += u64::from(converted.status == ConversionStatus::Prior);
         value.missing += u64::from(converted.status == ConversionStatus::Missing);
         if let Some(amount) = converted.displayed {
-            let amount = fx::minor_i128(&amount.minor)?;
+            let amount = currency::minor_i128(&amount.minor)?;
             value.projected += amount;
             if actual {
                 value.actual += amount;

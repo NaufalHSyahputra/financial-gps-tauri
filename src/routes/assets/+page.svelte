@@ -35,11 +35,13 @@
 <Feedback error={assets.error || groups.error || task.error} loading={assets.loading || groups.loading}/>
 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
   {#each assets.value?.rows??[] as item (item.id)}
-    <Card as="article" class="relative hover:border-status">
-      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="section-title"><a href={'/assets/'+item.id} class="hover:underline after:absolute after:inset-0">{item.draft.name}</a></h2><Badge variant="secondary" >{item.archivedOn?'Archived':item.draft.kind.replace(/([A-Z])/g,' $1')}</Badge></div>
+    <Card as="article" class="flex items-center gap-2 p-0 hover:border-status md:p-0">
+      <a href={'/assets/'+item.id} aria-label={item.draft.name} class="tactile min-h-11 min-w-0 flex-1 self-stretch rounded-l-xl p-3 no-underline hover:bg-ground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="section-title">{item.draft.name}</h2><Badge variant="secondary" >{item.archivedOn?'Archived':item.draft.kind.replace(/([A-Z])/g,' $1')}</Badge></div>
       <p class="numeric my-3 text-xl">{privacy.money(item.value)}</p>
       <p class="text-sm text-muted-foreground">Valued {privacy.date(item.valuedOn)} {item.valuationSource??''}</p>
-      <div class="pointer-events-none relative mt-2 flex justify-end [&>[data-row-actions]]:pointer-events-auto"><RowActions itemName={item.draft.name}
+      </a>
+      <div class="shrink-0 pr-2"><RowActions itemName={item.draft.name}
         onEdit={()=>void goto('/assets/'+item.id+'#asset-editor')}
         onDelete={()=>removal={id:item.id,name:item.draft.name,kind:'asset'}} extraActions={[
           {id:'history',label:'View valuations and trades',onclick:()=>void goto('/assets/'+item.id+'#asset-history')},

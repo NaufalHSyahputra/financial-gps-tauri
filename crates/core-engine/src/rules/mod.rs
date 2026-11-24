@@ -3,7 +3,7 @@ pub use storage::*;
 
 use crate::{
     domain::{Result, normalize, parse_date},
-    ledger_engine::{Context, dto, fx, invalid, minor, name, scale, transactions::TxDraft},
+    ledger_engine::{Context, currency, dto, invalid, minor, name, scale, transactions::TxDraft},
 };
 use regex::{Regex, RegexBuilder};
 use rust_decimal::Decimal;
@@ -184,7 +184,7 @@ impl CompiledPredicate {
                     1
                 };
                 compare(
-                    fx::major(i128::from(minor(&draft.amount.minor)?) * sign, row.scale)?
+                    currency::major(i128::from(minor(&draft.amount.minor)?) * sign, row.scale)?
                         .cmp(amount),
                     &self.operator,
                 )

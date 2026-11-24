@@ -2,7 +2,7 @@ use crate::sql::{OptionalExtension, params, params_from_iter};
 use chrono::{Datelike, Days};
 
 use super::{
-    accounts, fx,
+    accounts, currency,
     transactions::{self as tx, EntryKind, Query, TxDetail, TxDraft, TxRow},
     *,
 };
@@ -136,19 +136,25 @@ pub fn save(
                 if q.source.trim().is_empty() || q.source.len() > 128 {
                     return Err(invalid("source", "invalid_rate_source"));
                 }
-                fx::rate(&q.decimal)
+                currency::rate(&q.decimal)
             })
             .transpose()?;
         if let Some(value) = parsed {
             if derive_debit {
                 positive(&credit.amount.minor)?;
-                debit.amount =
-                    fx::convert_quoted(ctx, &credit.amount, &debit.amount.currency, value, true)?;
+                debit.amount = currency::convert_quoted(
+                    ctx,
+                    &credit.amount,
+                    &debit.amount.currency,
+                    value,
+                    true,
+                )?;
             } else if derive_credit {
                 positive(&debit.amount.minor)?;
                 credit.amount =
-                    fx::convert_at_rate(ctx, &debit.amount, &credit.amount.currency, value)?;
-            } else if fx::convert_at_rate(ctx, &debit.amount, &credit.amount.currency, value)?.minor
+                    currency::convert_at_rate(ctx, &debit.amount, &credit.amount.currency, value)?;
+            } else if currency::convert_at_rate(ctx, &debit.amount, &credit.amount.currency, value)?
+                .minor
                 != credit.amount.minor
             {
                 return Err(invalid("rate", "quoted_rate_conflicts_with_amounts"));
@@ -161,11 +167,11 @@ pub fn save(
         let decimal = if let Some(value) = parsed {
             value
         } else {
-            fx::major(
+            currency::major(
                 i128::from(credit_amount),
                 scale(&ctx.tx, &credit.amount.currency)?,
             )?
-            .checked_div(fx::major(
+            .checked_div(currency::major(
                 i128::from(debit_amount),
                 scale(&ctx.tx, &debit.amount.currency)?,
             )?)

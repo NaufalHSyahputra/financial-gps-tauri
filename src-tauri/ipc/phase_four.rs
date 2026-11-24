@@ -6,7 +6,6 @@ use super::{
     *,
 };
 use crate::{
-    importers::{self as imports, *},
     ledger_engine::{
         Context, DateRange, Deleted, Money, Mutation, Page, PageReq, VersionedId, Write,
         corrections, dto, export::FileResult, invalid, revision, staging::Stage,
@@ -25,8 +24,6 @@ use crate::{
 
 #[derive(Default)]
 pub(super) struct Stages {
-    imports: Stage<ImportPlan>,
-    undos: Stage<UndoPlan>,
     rules: Stage<RulePlan>,
     opened: parking_lot::Mutex<Vec<(std::time::Instant, tempfile::NamedTempFile)>>,
     restore: parking_lot::Mutex<Option<RestoreStage>>,
@@ -42,8 +39,6 @@ impl Stages {
         }
     }
     pub(super) fn invalidate(&self, scope: &Scope) {
-        self.imports.invalidate(scope);
-        self.undos.invalidate(scope);
         self.rules.invalidate(scope);
         self.opened.lock().clear();
         let mut restore = self.restore.lock();
@@ -135,143 +130,6 @@ fn spawn<R: Runtime>(
 
 #[tauri::command]
 #[specta::specta]
-pub(crate) async fn import_preview_start<R: Runtime>(
-    window: WebviewWindow<R>,
-    state: State<'_, Arc<Desktop>>,
-    scope: Scope,
-    input: ImportStart,
-) -> Result<JobTicket> {
-    authorize(window.label())?;
-    state.check_module("import_preview_start")?;
-    let worker_scope = scope.clone();
-    start(
-        window,
-        Arc::clone(state.inner()),
-        scope,
-        JobKind::ImportPreview,
-        "parsing",
-        move |state, worker_window, label, id| {
-            let grant =
-                state
-                    .grants
-                    .consume(label, PathPurpose::StatementImport, &input.file_grant)?;
-            let file_name = grant
-                .revalidate()?
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| invalid("file", "invalid_import_filename"))?;
-            let bytes = read_file(&grant, imports::MAX_FILE_BYTES)?;
-            if matches!(input.kind.as_str(), "asset" | "fx") {
-                if input.kind == "asset" {
-                    state.check_module("assets_list")?;
-                }
-                if input
-                    .format
-                    .is_some_and(|format| format != StatementFormat::Csv)
-                    || input.account_id.is_some()
-                    || input.template_id.is_some()
-                    || input.parser_options.is_some()
-                {
-                    return Err(invalid("kind", "invalid_import_kind_options"));
-                }
-                return state
-                    .ledgers()?
-                    .read_cancellable(label, &worker_scope, |tx, stopping| {
-                        let ctx =
-                            Context::system(crate::storage::SqliteSession(tx), &worker_scope)?;
-                        imports::preview_structured_observed(
-                            &ctx,
-                            &state.phase_four.imports,
-                            file_name,
-                            &bytes,
-                            &input.kind,
-                            &|| stopping() || state.jobs.is_cancelled(id),
-                            &|done| state.jobs.import_progress(worker_window, id, done),
-                        )
-                        .map(JobOutput::ImportPreview)
-                    });
-            }
-            if input.kind != "statement" {
-                return Err(invalid("kind", "invalid_import_kind"));
-            }
-            let request = PreviewRequest {
-                account_id: input
-                    .account_id
-                    .ok_or_else(|| invalid("accountId", "account_required"))?,
-                format: input.format,
-                template_id: input.template_id,
-                parser_options: input.parser_options,
-                detect_duplicates: input.detect_duplicates,
-            };
-            state
-                .ledgers()?
-                .read_cancellable(label, &worker_scope, |tx, stopping| {
-                    let ctx = Context::system(crate::storage::SqliteSession(tx), &worker_scope)?;
-                    imports::preview_observed(
-                        &ctx,
-                        &state.phase_four.imports,
-                        file_name,
-                        &bytes,
-                        &request,
-                        &|| stopping() || state.jobs.is_cancelled(id),
-                        &|done| state.jobs.import_progress(worker_window, id, done),
-                    )
-                    .map(JobOutput::ImportPreview)
-                })
-        },
-    )
-}
-
-#[tauri::command]
-#[specta::specta]
-pub(crate) async fn import_commit_start<R: Runtime>(
-    window: WebviewWindow<R>,
-    state: State<'_, Arc<Desktop>>,
-    mutation: Mutation,
-    input: ImportCommit,
-) -> Result<JobTicket> {
-    authorize(window.label())?;
-    state.check_module("import_commit_start")?;
-    start(
-        window,
-        Arc::clone(state.inner()),
-        mutation.scope.clone(),
-        JobKind::ImportCommit,
-        "validating",
-        move |state, window, label, id| {
-            state.ledgers()?.write_domain(label, &mutation.scope, |tx| {
-                let ctx = Context::system(crate::storage::SqliteSession(tx), &mutation.scope)?;
-                let result = ctx.mutate(
-                    "import_commit_start",
-                    &mutation,
-                    &input,
-                    &["importBatches", "transactions"],
-                    |ctx| {
-                        if imports::is_asset_preview(
-                            ctx,
-                            &state.phase_four.imports,
-                            &input.preview_token,
-                        )? {
-                            state.check_module("assets_list")?;
-                        }
-                        imports::commit(
-                            ctx,
-                            &state.phase_four.imports,
-                            &input.preview_token,
-                            &input.row_decisions,
-                            &|| state.jobs.is_cancelled(id),
-                        )
-                    },
-                )?;
-                state.jobs.publish(window, id)?;
-                Ok(JobOutput::ImportCommit(result))
-            })
-        },
-    )
-}
-
-#[tauri::command]
-#[specta::specta]
 pub(crate) async fn rule_preview_start<R: Runtime>(
     window: WebviewWindow<R>,
     state: State<'_, Arc<Desktop>>,
@@ -342,67 +200,6 @@ pub(crate) async fn rule_apply_start<R: Runtime>(
             })
         },
     )
-}
-
-#[tauri::command]
-#[specta::specta]
-pub(crate) async fn import_template_file<R: Runtime>(
-    window: WebviewWindow<R>,
-    state: State<'_, Arc<Desktop>>,
-    mutation: Mutation,
-    input: TemplateFile,
-) -> Result<TemplateFileResult> {
-    authorize(window.label())?;
-    state.check_module("import_template_file")?;
-    let label = window.label().to_owned();
-    let state = Arc::clone(state.inner());
-    blocking(move || match input.direction {
-        FileDirection::Import => state
-            .ledgers()?
-            .write_domain(&label, &mutation.scope, |tx| {
-                let ctx = Context::system(crate::storage::SqliteSession(tx), &mutation.scope)?;
-                ctx.mutate(
-                    "import_template_file",
-                    &mutation,
-                    &input,
-                    &["importTemplates"],
-                    |ctx| {
-                        let grant = state.grants.consume(
-                            &label,
-                            PathPurpose::TemplateRead,
-                            &input.grant,
-                        )?;
-                        let draft = imports::decode_template(
-                            &read_file(&grant, 128 * 1024)?,
-                            &input.format,
-                        )?;
-                        imports::template_save(ctx, None, &draft)
-                    },
-                )
-                .map(TemplateFileResult::Imported)
-            }),
-        FileDirection::Export => state.ledgers()?.read_domain(&label, &mutation.scope, |tx| {
-            let ctx = Context::system(crate::storage::SqliteSession(tx), &mutation.scope)?;
-            let grant = state
-                .grants
-                .consume(&label, PathPurpose::TemplateWrite, &input.grant)?;
-            let template = imports::template_get(
-                &ctx,
-                input
-                    .template_id
-                    .as_deref()
-                    .ok_or_else(|| invalid("templateId", "template_required"))?,
-            )?;
-            write_file(
-                &grant,
-                &imports::encode_template(&template, &input.format)?,
-                1,
-                &ctx,
-            )
-            .map(TemplateFileResult::Exported)
-        }),
-    })
-    .await
 }
 
 #[tauri::command]

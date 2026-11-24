@@ -23,20 +23,22 @@
         onchange={event=>select?.(event.currentTarget.checked)} />
     </Label>
   {/if}
-  <a href={'/transactions/'+row.id} class="grid min-h-14 min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)] items-center gap-2 px-3 py-2 no-underline hover:bg-ground">
+  <a href={'/transactions/'+row.id} class={['grid min-h-14 min-w-0 flex-1 items-center gap-2 px-3 py-2 no-underline hover:bg-ground',
+    actions ? 'grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)]'
+      : 'grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)]']}>
     <TransactionCategoryIcon {row} size="md"/>
     <span class="min-w-0">
       <span class="block truncate text-sm font-semibold">{title}</span>
       <span class="block truncate text-xs text-muted-foreground">{[account,classification].filter(Boolean).join(' · ')}</span>
       {#if row.status!=='posted'}<span class={["block text-xs", row.status === "pending" ? "text-pending" : "text-info"]}>{row.status==='pending'?'Pending':'Expected'}</span>{/if}
     </span>
-    <span class="max-w-36 text-right">
+    <span class={actions ? 'col-start-2 min-w-0 wrap-anywhere text-left sm:col-start-3 sm:max-w-36 sm:text-right' : 'max-w-36 text-right'}>
       <span class="numeric block text-sm font-semibold" class:amount-mask={privacy.masked} class:text-money-in={incoming && !privacy.masked} class:text-money-out={!incoming && !privacy.masked}>
         {privacy.money(incoming?row.amount:{...row.amount,minor:'-'+row.amount.minor})}
       </span>
       {#if running && row.runningBalance}<span class="numeric block text-xs text-muted-foreground">{privacy.money(row.runningBalance)}</span>{/if}
     </span>
   </a>
+  {#if actions}<div class="shrink-0 pr-1">{@render actions()}</div>{/if}
   </div>
-  {#if actions}<div class="flex justify-end px-2 pb-1">{@render actions()}</div>{/if}
 </li>

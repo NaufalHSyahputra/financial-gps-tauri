@@ -34,11 +34,6 @@ macro_rules! ledger_types {
             pub struct PayeeSave { pub target:Option<VersionedId>, pub draft:PayeeDraft }
             pub struct ReferenceDelete { pub id:String, pub replacement_id:Option<String>, pub confirm:Option<bool> }
             pub struct PayeeMerge { pub from_ids:Vec<String>, pub into_id:String, pub confirm:bool }
-            pub struct ConversionQuery { pub amount:Money, pub quote_currency:String, pub date:Option<String> }
-            pub struct RateList { pub pair:Option<CurrencyPair>, pub range:Option<DateRange>, pub page:PageReq }
-            pub struct RateSave { pub target:Option<VersionedId>, pub draft:FxRateDraft }
-            pub struct RateProvider { pub provider:Provider, pub enabled:bool, pub credential:Option<String> }
-            pub struct RateRefresh { pub provider:Provider, pub pairs:Vec<CurrencyPair>, pub date:String }
             pub struct DashboardQuery { pub as_of:Option<String>, #[serde(default)] pub account_ids:Vec<String>, #[serde(default)] pub widgets:Vec<DashboardWidget> }
             pub struct ReportQuery { pub kind:ReportKind, pub filter:LedgerFilter, pub granularity:Granularity, pub currency:Option<String> }
             pub struct CalendarQuery { pub range:DateRange, pub basis:DateBasis, #[serde(default)] pub account_ids:Vec<String>, pub include_projection:Option<bool> }
@@ -50,7 +45,6 @@ macro_rules! ledger_types {
         page_response!(CategoryGroupPage, CategoryGroup);
         page_response!(CategoryPage, Category);
         page_response!(PayeePage, Payee);
-        page_response!(RatePage, FxRate);
         page_response!(SearchPage, SearchHit);
     };
 }
@@ -494,42 +488,9 @@ macro_rules! ledger_operations {
                 input.confirm
             )
         );
-        scoped_read!(currencies_list, Vec<Currency>, |ctx| fx::currencies(ctx));
-        scoped_read!(
-            fx_convert,
-            ConversionQuery,
-            Conversion,
-            |ctx, input, _state, _label| {
-                let day =
-                    $crate::ledger_engine::date_option(input.date.as_deref())?.unwrap_or(ctx.today);
-                fx::Resolver::new(ctx).convert(&input.amount, &input.quote_currency, day)
-            }
-        );
-        scoped_read!(
-            fx_rates_list,
-            RateList,
-            RatePage,
-            |ctx, input, _state, _label| fx::list(
-                ctx,
-                input.pair.as_ref(),
-                input.range.as_ref(),
-                &input.page
-            )
-        );
-        scoped_write!(
-            fx_rate_save,
-            RateSave,
-            FxRate,
-            &["fxRates", "accounts", "reports"],
-            |ctx, input, _state, _label| fx::save(ctx, input.target.as_ref(), &input.draft)
-        );
-        scoped_write!(
-            fx_rate_delete,
-            RecordId,
-            Deleted,
-            &["fxRates", "accounts", "reports"],
-            |ctx, input, _state, _label| fx::delete(ctx, &input.id)
-        );
+        scoped_read!(currencies_list, Vec<Currency>, |ctx| currency::currencies(
+            ctx
+        ));
         scoped_read!(
             dashboard_get,
             DashboardQuery,
@@ -586,19 +547,7 @@ macro_rules! planning_types {
             pub struct Id { pub id:String }
             pub struct ConfirmedId { pub id:String, pub confirm:Option<bool> }
             pub struct PageQuery { pub page:PageReq }
-            pub struct TemplateQuery { pub format:Option<StatementFormat> }
-            pub struct TemplateSave { pub target:Option<VersionedId>, pub draft:TemplateDraft }
             pub enum FileDirection { Import, Export }
-            pub struct TemplateFile { pub direction:FileDirection, pub grant:String, pub template_id:Option<String>, pub format:DocumentFormat }
-            pub enum TemplateFileResult { Imported(Write<ImportTemplate>), Exported(FileResult) }
-            pub struct ImportStart { pub file_grant:String, pub kind:String, pub account_id:Option<String>, pub format:Option<StatementFormat>,
-                pub template_id:Option<String>, pub parser_options:Option<ParserOptions>, pub detect_duplicates:Option<bool> }
-            pub struct ImportPage { pub preview_token:String, pub status:Option<PreviewStatus>, pub page:PageReq }
-            pub struct ImportCommit { pub preview_token:String, pub row_decisions:Vec<RowDecision> }
-            pub struct BatchQuery { pub batch_id:String }
-            pub struct BatchesQuery { pub kind:Option<String>, pub page:PageReq }
-            pub struct UndoQuery { pub batch_id:String, pub selection:Option<Vec<u32>> }
-            pub struct UndoApply { pub preview_token:String, pub selected_ordinals:Vec<u32> }
             pub struct RuleSave { pub target:Option<VersionedId>, pub draft:RuleDraft }
             pub struct RuleReorder { pub ordered_ids:Vec<String> }
             pub struct RuleStart { pub draft_or_ids:RuleSelection, pub filter:LedgerFilter, pub sample_limit:u16, pub override_policy:Option<OverridePolicy> }
@@ -623,8 +572,6 @@ macro_rules! planning_types {
             pub struct TradeSave { pub target:Option<VersionedId>, pub draft:assets::TradeDraft }
             pub struct AssetHistory { pub asset_id:String, pub range:DateRange, pub page:PageReq, pub view:assets::HistoryView }
         }
-        page_response!(ImportPreviewPage, ImportPreviewRow);
-        page_response!(ImportBatchPage, ImportBatch);
         page_response!(RecurringPage, recurring::RecurringDetail);
         page_response!(OccurrencePage, recurring::Occurrence);
         page_response!(LoanSchedulePage, loans::Installment);
@@ -721,93 +668,6 @@ macro_rules! planning_operations {
             Id,
             Vec<corrections::PostingAuditItem>,
             |ctx, args, _desktop, _window| corrections::history(ctx, &args.id)
-        );
-        scoped_read!(
-            import_templates_list,
-            TemplateQuery,
-            Vec<ImportTemplate>,
-            |ctx, args, _desktop, _window| imports::templates(ctx, args.format)
-        );
-        scoped_write!(
-            import_template_save,
-            TemplateSave,
-            ImportTemplate,
-            &["importTemplates"],
-            |ctx, args, _desktop, _window| imports::template_save(
-                ctx,
-                args.target.as_ref(),
-                &args.draft
-            )
-        );
-        scoped_write!(
-            import_template_delete,
-            Id,
-            Deleted,
-            &["importTemplates"],
-            |ctx, args, _desktop, _window| imports::template_delete(ctx, &args.id)
-        );
-        scoped_read!(
-            import_preview_page,
-            ImportPage,
-            ImportPreviewPage,
-            |ctx, args, desktop, _window| {
-                if imports::is_asset_preview(ctx, &desktop.phase_four.imports, &args.preview_token)?
-                {
-                    desktop.check_module("assets_list")?;
-                }
-                imports::preview_rows(
-                    ctx,
-                    &desktop.phase_four.imports,
-                    &args.preview_token,
-                    args.status.as_ref(),
-                    &args.page,
-                )
-            }
-        );
-        scoped_read!(
-            import_batches_list,
-            BatchesQuery,
-            ImportBatchPage,
-            |ctx, args, _desktop, _window| imports::batches(ctx, args.kind.as_deref(), &args.page)
-        );
-        scoped_read!(
-            import_batch_get,
-            BatchQuery,
-            ImportBatch,
-            |ctx, args, _desktop, _window| imports::batch_get(ctx, &args.batch_id)
-        );
-        scoped_read!(
-            import_undo_preview,
-            UndoQuery,
-            UndoPreview,
-            |ctx, args, desktop, _window| {
-                if imports::batch_get(ctx, &args.batch_id)?.kind == "asset" {
-                    desktop.check_module("assets_list")?;
-                }
-                imports::undo_preview(
-                    ctx,
-                    &desktop.phase_four.undos,
-                    &args.batch_id,
-                    args.selection.as_deref(),
-                )
-            }
-        );
-        scoped_write!(
-            import_undo_apply,
-            UndoApply,
-            UndoResult,
-            &["importBatches", "transactions"],
-            |ctx, args, desktop, _window| {
-                if imports::is_asset_undo(ctx, &desktop.phase_four.undos, &args.preview_token)? {
-                    desktop.check_module("assets_list")?;
-                }
-                imports::undo_apply(
-                    ctx,
-                    &desktop.phase_four.undos,
-                    &args.preview_token,
-                    &args.selected_ordinals,
-                )
-            }
         );
         scoped_read!(rules_list, Vec<Rule>, |ctx| rules::list(ctx));
         scoped_read!(rule_get, Id, Rule, |ctx, args, _desktop, _window| {

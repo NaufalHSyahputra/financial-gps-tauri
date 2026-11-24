@@ -50,14 +50,16 @@
     <section class="mb-6" id={kind.code==='loan'?'loans':undefined}><h2 class="section-title mb-3">{kind.label}</h2>
       <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {#each matching as item (item.id)}
-          <Card as="article" class="relative hover:border-status">
-            <div class="flex items-center justify-between gap-2"><h3 class="min-w-0 font-medium">
-              <a href={'/accounts/'+item.id} class="tactile flex min-h-11 items-center gap-2 hover:underline after:absolute after:inset-0"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/><span class="break-words">{item.account.name}</span></a></h3><Badge variant="secondary" >{item.account.currencyCode}</Badge></div>
+          <Card as="article" class="flex items-center gap-2 p-0 hover:border-status md:p-0">
+      <a href={'/accounts/'+item.id} aria-label={item.account.name} class="tactile min-h-11 min-w-0 flex-1 self-stretch rounded-l-xl p-3 no-underline hover:bg-ground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+            <div class="flex items-center justify-between gap-2"><h3 class="flex min-w-0 items-center gap-2 font-medium">
+              <AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/><span class="break-words">{item.account.name}</span></h3><Badge variant="secondary" >{item.account.currencyCode}</Badge></div>
             {#if item.account.institution}<p class="text-sm text-muted-foreground">{item.account.institution}</p>{/if}
             <p class="numeric mt-3 text-xl">{privacy.money(item.balance)}</p>
             {#if item.archivedOn}<Badge variant="secondary" >Archived</Badge>{/if}
             {#if item.credit && !item.credit.lineId}<CreditMeter credit={item.credit}/>{/if}
-            <div class="pointer-events-none relative mt-2 flex justify-end [&>[data-row-actions]]:pointer-events-auto"><RowActions itemName={item.account.name}
+            </a>
+      <div class="shrink-0 pr-2"><RowActions itemName={item.account.name}
               onEdit={()=>void goto('/accounts/'+item.id+'#account-editor')} onDelete={()=>removingAccount=item}
               extraActions={[
                 {id:'transactions',label:'View transactions',onclick:()=>void goto('/transactions?account='+item.id)},

@@ -18,9 +18,11 @@
 <Feedback error={groups.error||task.error} loading={groups.loading}/>
 <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
   {#each groups.value?.rows??[] as row (row.id)}
-    <Card as="article" class="relative hover:border-status">
-      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="section-title"><a href={'/groups/'+row.id} class="hover:underline after:absolute after:inset-0">{row.name}</a></h2><Badge variant="secondary">{row.archived?'Archived':row.kind.replace(/([A-Z])/g,' $1')}</Badge></div>
-      <div class="pointer-events-none relative mt-2 flex justify-end [&>[data-row-actions]]:pointer-events-auto"><RowActions itemName={row.name} onEdit={()=>void goto('/groups/'+row.id+'?edit=1')}
+    <Card as="article" class="flex items-center gap-2 p-0 hover:border-status md:p-0">
+      <a href={'/groups/'+row.id} aria-label={row.name} class="tactile min-h-11 min-w-0 flex-1 self-stretch rounded-l-xl p-3 no-underline hover:bg-ground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+      <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="section-title">{row.name}</h2><Badge variant="secondary">{row.archived?'Archived':row.kind.replace(/([A-Z])/g,' $1')}</Badge></div>
+      </a>
+      <div class="shrink-0 pr-2"><RowActions itemName={row.name} onEdit={()=>void goto('/groups/'+row.id+'?edit=1')}
         extraActions={[
           {id:'view',label:'View balances and expenses',onclick:()=>void goto('/groups/'+row.id)},
           {id:'archive',label:row.archived?'Restore group':'Archive group',disabled:task.busy,onclick:()=>void task.run(async()=>{

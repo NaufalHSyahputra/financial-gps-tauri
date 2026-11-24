@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use super::{
-    Context, Deleted, Write, accounts, catalog, codec_error, fx, parse_date, revision,
-    transactions, transfers, workflows,
+    Context, Deleted, Write, accounts, catalog, codec_error, parse_date, revision, transactions,
+    transfers, workflows,
 };
 use crate::domain::{AppError, ErrorCode, Result};
 
@@ -99,7 +99,6 @@ record!(
 record!(catalog::CategoryGroup, |value| value.id, catalog::group_get);
 record!(catalog::Category, |value| value.id, catalog::category_get);
 record!(catalog::Payee, |value| value.id, catalog::payee_get);
-record!(fx::FxRate, |value| value.id, fx::get);
 record!(
     transactions::TxDetail,
     |value| value.row.id,
@@ -175,21 +174,5 @@ impl ReceiptValue for workflows::InstallmentDetail {
             series_id,
             transactions,
         })
-    }
-}
-
-impl ReceiptValue for fx::FxRefreshResult {
-    type Reference = Vec<String>;
-
-    fn reference(&self, _: &Context<'_>) -> Self::Reference {
-        self.rates.iter().map(|rate| rate.id.clone()).collect()
-    }
-
-    fn reload(ctx: &Context<'_>, ids: Self::Reference) -> Result<Self> {
-        let rates = ids
-            .iter()
-            .map(|id| fx::get(ctx, id))
-            .collect::<Result<_>>()?;
-        Ok(Self { rates })
     }
 }

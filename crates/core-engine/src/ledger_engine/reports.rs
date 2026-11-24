@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use super::{
     accounts::{self, AccountDetail, Credit},
-    fx::{self, ConversionStatus, Resolver},
+    currency::{self, ConversionStatus, Resolver},
     transactions::{self as tx, LedgerFilter, Query, TxRow},
     *,
 };
@@ -66,10 +66,10 @@ impl Aggregate {
         add_amount(self.native.entry(currency.to_owned()).or_default(), amount)?;
         let conversion = fx.convert(&money(currency, amount), target, date)?;
         if let Some(reliable) = conversion.displayed {
-            add_amount(&mut self.reliable, fx::minor_i128(&reliable.minor)?)?;
+            add_amount(&mut self.reliable, currency::minor_i128(&reliable.minor)?)?;
         }
         if let Some(estimate) = conversion.estimate {
-            add_amount(&mut self.estimated, fx::minor_i128(&estimate.minor)?)?;
+            add_amount(&mut self.estimated, currency::minor_i128(&estimate.minor)?)?;
         }
         self.prior += u64::from(conversion.status == ConversionStatus::Prior);
         self.missing += u64::from(conversion.status == ConversionStatus::Missing);
@@ -396,7 +396,9 @@ fn pnl(
             let Some(displayed) = result.displayed else {
                 continue;
             };
-            if !(i128::from(min)..=i128::from(max)).contains(&fx::minor_i128(&displayed.minor)?) {
+            if !(i128::from(min)..=i128::from(max))
+                .contains(&currency::minor_i128(&displayed.minor)?)
+            {
                 continue;
             }
         }
@@ -481,7 +483,7 @@ fn net_worth(
             }
             let asset = assets::get(ctx, id, Some(&cutoff))?;
             if asset.valued_on.is_some() {
-                let amount = fx::minor_i128(&asset.value.minor)?;
+                let amount = currency::minor_i128(&asset.value.minor)?;
                 point
                     .value
                     .add(resolver, &asset.value.currency, amount, target, end)?;
@@ -600,7 +602,7 @@ fn cash_flow(
         if let Some((code, (min, max))) = display {
             let converted = resolver.convert(&money(currency, unsigned), code, effective)?;
             if converted.displayed.is_none_or(|result| {
-                fx::minor_i128(&result.minor)
+                currency::minor_i128(&result.minor)
                     .is_ok_and(|v| v < i128::from(min) || v > i128::from(max))
             }) {
                 continue;
@@ -699,7 +701,7 @@ pub fn dashboard(
             totals.add(
                 &mut resolver,
                 &account.balance.currency,
-                fx::minor_i128(&account.balance.minor)?,
+                currency::minor_i128(&account.balance.minor)?,
                 &target,
                 date,
             )?;

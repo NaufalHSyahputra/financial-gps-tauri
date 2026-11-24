@@ -5,19 +5,18 @@ use std::{
 
 use crate::{
     domain::{AppError, ErrorCode, Result, Scope},
-    ledger_engine::{Write, dto, export::FileResult, fx::FxRefreshResult, invalid, new_id},
+    ledger_engine::{Write, dto, export::FileResult, invalid, new_id},
 };
 use parking_lot::Mutex;
 use tauri::{Emitter, Runtime, WebviewWindow};
 
 dto! {
-    pub enum JobKind { FxRefresh, TransactionsExport, ImportPreview, ImportCommit, RulePreview, RuleApply, AttachmentAdd, BackupCreate, RestorePreview, RestoreApply, LedgerChangeProtection }
+    pub enum JobKind { TransactionsExport, RulePreview, RuleApply, AttachmentAdd, BackupCreate, RestorePreview, RestoreApply, LedgerChangeProtection }
     #[derive(PartialEq, Eq)]
     pub enum JobState { Queued, Running, Publishing, Complete, Failed, Cancelled }
     #[serde(tag="kind",content="value")]
     pub enum JobOutput {
-        FxRefresh(Write<FxRefreshResult>), TransactionsExport(FileResult),
-        ImportPreview(crate::importers::ImportPreview), ImportCommit(Write<crate::importers::ImportBatch>),
+        TransactionsExport(FileResult),
         RulePreview(crate::rules::RulePreview), RuleApply(Write<crate::rules::RuleApplyResult>),
         AttachmentAdd(Write<crate::storage::attachments::AttachmentWriteResult>),
         BackupCreate(crate::storage::backups::BackupSummary),
@@ -145,24 +144,6 @@ impl JobStore {
         let _ = window.emit("ledger-job-progress", update);
         Ok(())
     }
-    pub fn import_progress<R: Runtime>(&self, window: &WebviewWindow<R>, id: &str, done: u32) {
-        let mut jobs = self.0.lock();
-        let Some(job) = jobs.get_mut(id).filter(|job| {
-            job.snapshot.state == JobState::Running
-                && matches!(job.snapshot.kind, JobKind::ImportPreview)
-                && job.window == window.label()
-        }) else {
-            return;
-        };
-        job.snapshot.done = Some(done);
-        if job.updated.elapsed() < Duration::from_millis(250) {
-            return;
-        }
-        let update = job.progress("parsing");
-        drop(jobs);
-        let _ = window.emit("ledger-job-progress", update);
-    }
-
     pub fn is_cancelled(&self, id: &str) -> bool {
         self.0
             .lock()

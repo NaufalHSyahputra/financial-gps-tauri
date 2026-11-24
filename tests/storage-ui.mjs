@@ -265,6 +265,12 @@ async function glassDevice(width, height, flavor) {
 
 async function glassPanel(locator, dimChrome = false) {
   await locator.waitFor();
+  // Drawers can mount below the viewport one frame before their entrance starts.
+  await locator.page().waitForFunction(el => {
+    const bounds = el.getBoundingClientRect();
+    return bounds.top >= -1 && bounds.bottom <= innerHeight + 1
+      && bounds.left >= -1 && bounds.right <= innerWidth + 1;
+  }, await locator.elementHandle(), { timeout: 3000 });
   await locator.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished.catch(() => {}))));
   const { bounds, filter, clip, maxLayers, barFilters, alpha } = await locator.evaluate(el => {
     const bounds = el.getBoundingClientRect();
@@ -375,7 +381,14 @@ async function verifyMobile(width, height, flavor) {
   await page.getByRole('heading', { name: 'Mobile groceries', exact: true }).waitFor();
   await tabs.waitFor({ state: 'hidden' });
   await page.getByRole('link', { name: 'Back', exact: true }).click();
-  await page.getByRole('region', { name: 'Today' }).getByRole('link', { name: /Mobile groceries/ }).waitFor();
+  const groceries = page.getByRole('region', { name: 'Today' }).getByRole('listitem').filter({ hasText: 'Mobile groceries' });
+  const detail = groceries.getByRole('link', { name: /Mobile groceries/ });
+  await detail.waitFor();
+  const edit = button(groceries, 'Edit Mobile groceries');
+  const linkBounds = await detail.boundingBox();
+  const editBounds = await edit.boundingBox();
+  assert.ok(linkBounds && editBounds && editBounds.width >= 44 && editBounds.height >= 44);
+  assert.ok(editBounds.x >= linkBounds.x + linkBounds.width && editBounds.y < linkBounds.y + linkBounds.height);
   await noOverflow('/transactions');
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   const lastRow = page.getByRole('region', { name: 'Today' }).getByRole('listitem').last();
@@ -420,6 +433,12 @@ async function verifyMobile(width, height, flavor) {
   await page.getByRole('status').filter({ hasText: 'App preferences saved.' }).waitFor();
   await tab('Plan').click();
   const plan = page.getByRole('navigation', { name: 'Plan sections' });
+  await plan.getByRole('link', { name: 'Cash plan', exact: true }).waitFor();
+  await button(tabs, 'More').click();
+  const more = page.getByRole('dialog', { name: 'More' });
+  await more.waitFor();
+  assert.equal(await more.getByRole('link', { name: 'Cash plan', exact: true }).count(), 0);
+  await button(more, 'Close dialog').click();
   await plan.waitFor();
   await page.getByRole('heading', { name: 'Budgets', exact: true }).waitFor();
   await noOverflow('/budgets');
@@ -613,6 +632,12 @@ async function verifyCategoryIcons(width, height) {
   const txRow = page.getByRole(mobile ? 'listitem' : 'row').filter({ has: page.getByRole('link', { name: /^Groceries/ }) });
   await txRow.locator('[data-category-icon="shopping-bag"]').waitFor();
   const actions = txRow.getByRole('group', { name: 'Actions for Groceries' });
+  if (mobile) {
+    const linkBox = await txRow.getByRole('link', { name: /^Groceries/ }).boundingBox();
+    const actionBox = await actions.boundingBox();
+    assert.ok(linkBox && actionBox && actionBox.x >= linkBox.x + linkBox.width
+      && actionBox.y < linkBox.y + linkBox.height, 'row actions sit beside the transaction link');
+  }
   assert.deepEqual(await actions.getByRole('button').allTextContents(), ['', '', '']);
   for (const label of ['Edit Groceries', 'Delete Groceries', 'More actions Groceries']) {
     const bounds = await button(actions, label).boundingBox();

@@ -1,13 +1,13 @@
 use core_engine::{
     domain::{AppError, ErrorCode, Result, Scope},
-    importers::{self as imports, *},
     ledger_engine::{
         Context, DateBasis, DateRange, Deleted, Money, Mutation, Page, PageReq, VersionedId, Write,
         accounts::{self, *},
         catalog::{self, *},
-        corrections, dto,
+        corrections,
+        currency::{self, Currency},
+        dto,
         export::*,
-        fx::{self, *},
         reports::{self, *},
         staging::Stage,
         transactions::{self, *},
@@ -35,14 +35,10 @@ extern "C" {
     fn cancelled(this: &JsJobObserver) -> std::result::Result<bool, JsValue>;
     #[wasm_bindgen(method, catch)]
     fn publishing(this: &JsJobObserver) -> std::result::Result<bool, JsValue>;
-    #[wasm_bindgen(method, catch)]
-    fn progress(this: &JsJobObserver, done: u32) -> std::result::Result<(), JsValue>;
 }
 
 #[derive(Default)]
 struct Stages {
-    imports: Stage<ImportPlan>,
-    undos: Stage<UndoPlan>,
     rules: Stage<RulePlan>,
 }
 
@@ -100,8 +96,6 @@ impl WebEngine {
     pub fn invalidate(&self, scope: &str) -> std::result::Result<(), JsValue> {
         let scope = from_str(scope).map_err(|e| error_value(invalid_request(e)))?;
         self.previews.invalidate("main");
-        self.phase_four.imports.invalidate(&scope);
-        self.phase_four.undos.invalidate(&scope);
         self.phase_four.rules.invalidate(&scope);
         Ok(())
     }
@@ -135,9 +129,6 @@ impl WebEngine {
             Some("asset" | "assets") => Feature::Assets,
             Some("recurring") => Feature::Recurring,
             Some("group" | "groups") => Feature::SharedGroups,
-            Some("fx") if matches!(command, "fx_provider_configure" | "fx_refresh_start") => {
-                Feature::FxProvider
-            }
             _ => return Ok(()),
         };
         if !self.prefs.enables(module) {

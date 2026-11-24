@@ -167,16 +167,16 @@ pub fn get(ctx: &Context<'_>, id: &str, as_of: Option<&str>) -> Result<GroupDeta
         })
         .collect::<Vec<_>>();
     let currency = accounts::settings(ctx)?.display_currency;
-    let mut resolver = fx::Resolver::new(ctx);
+    let mut resolver = currency::Resolver::new(ctx);
     let mut converted = BTreeMap::<String, (i128, u64, u64)>::new();
     for balance in &balances {
         let amount = resolver.convert(&balance.amount, &currency, date)?;
         let result = converted.entry(balance.member_id.clone()).or_default();
         if let Some(value) = amount.displayed {
-            result.0 += fx::minor_i128(&value.minor)?;
+            result.0 += currency::minor_i128(&value.minor)?;
         }
-        result.1 += u64::from(amount.status == fx::ConversionStatus::Prior);
-        result.2 += u64::from(amount.status == fx::ConversionStatus::Missing);
+        result.1 += u64::from(amount.status == currency::ConversionStatus::Prior);
+        result.2 += u64::from(amount.status == currency::ConversionStatus::Missing);
     }
     let display_balances = converted
         .into_iter()

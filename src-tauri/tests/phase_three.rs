@@ -9,8 +9,8 @@ use financial_gps::{
             self, AccountDraft, AccountKind, CardLineDraft, StatementDraft, StatementSource,
         },
         catalog::{self, CategoryDraft, CategoryKind, PayeeDraft},
+        currency::{self, ConversionStatus, Resolver},
         export::{self, ExportColumn},
-        fx::{self, ConversionStatus, CurrencyPair, FxRateDraft, RateSource, Resolver},
         money, new_id,
         reports::{self, DashboardWidget, Granularity, ReportKind, SearchKind},
         revision,
@@ -627,17 +627,18 @@ fn split_edit_rollback_unicode_tags_bulk_and_pnl_calculation() {
     .unwrap();
 }
 
-fn fx_row(base: &str, quote: &str, on: &str, rate: &str, source: RateSource) -> FxRateDraft {
-    FxRateDraft {
-        pair: CurrencyPair {
-            base_code: base.to_owned(),
-            quote_code: quote.to_owned(),
-        },
-        rate_date: on.to_owned(),
-        rate_decimal: rate.to_owned(),
-        source_kind: source,
-        source_key: "test".to_owned(),
-    }
+fn insert_saved_rate(
+    ctx: &Context<'_>,
+    base: &str,
+    quote: &str,
+    date: &str,
+    rate: &str,
+) -> Result<()> {
+    ctx.tx.execute(
+        "INSERT INTO fx_rates VALUES(?1,?2,?3,?4,?5,'manual','fixture',0)",
+        core_engine::sql::params![new_id(), base, quote, date, rate],
+    )?;
+    Ok(())
 }
 
 #[test]
@@ -651,30 +652,18 @@ fn currency_scales_exact_inverse_cross_and_missing_rates() {
                 (1, "KWD", "IDR", "1499.9", "1"),
                 (1, "KWD", "IDR", "1500", "2"),
             ] {
-                let result =
-                    fx::convert_at_rate(ctx, &money(source, amount), dest, fx::rate(rate)?)?;
+                let result = currency::convert_at_rate(
+                    ctx,
+                    &money(source, amount),
+                    dest,
+                    currency::rate(rate)?,
+                )?;
                 assert_eq!(result.minor, expected);
             }
-            fx::save(
-                ctx,
-                None,
-                &fx_row("USD", "EUR", "2026-08-01", "3", RateSource::Manual),
-            )?;
-            fx::save(
-                ctx,
-                None,
-                &fx_row("USD", "JPY", "2026-08-01", "0.015", RateSource::Manual),
-            )?;
-            fx::save(
-                ctx,
-                None,
-                &fx_row("EUR", "JPY", "2026-07-25", "999", RateSource::Manual),
-            )?;
-            fx::save(
-                ctx,
-                None,
-                &fx_row("EUR", "JPY", "2026-08-02", "1000", RateSource::Manual),
-            )?;
+            insert_saved_rate(ctx, "USD", "EUR", "2026-08-01", "3")?;
+            insert_saved_rate(ctx, "USD", "JPY", "2026-08-01", "0.015")?;
+            insert_saved_rate(ctx, "EUR", "JPY", "2026-07-25", "999")?;
+            insert_saved_rate(ctx, "EUR", "JPY", "2026-08-02", "1000")?;
             let mut resolver = Resolver::new(ctx);
             let exact = resolver.convert(&money("EUR", 100), "JPY", date("2026-09-01"))?;
             assert_eq!(exact.status, ConversionStatus::Exact);
@@ -691,7 +680,6 @@ fn currency_scales_exact_inverse_cross_and_missing_rates() {
             assert_eq!(missing.status, ConversionStatus::Missing);
             assert!(missing.displayed.is_none());
             assert_eq!(missing.estimate.unwrap().minor, "1500");
-            assert_eq!(fx::list(ctx, None, None, &page(20))?.rows.len(), 4);
             Ok(())
         })
         .unwrap();
