@@ -1,0 +1,71 @@
+[package]
+name = "financial-gps"
+version = "0.1.0"
+edition = "2024"
+default-run = "financial-gps"
+
+[lib]
+path = "lib.rs"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "financial-gps"
+path = "main.rs"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+binding-generator = []
+
+[build-dependencies]
+tauri-build = { version = "=2.7.6", features = [] }
+
+[dependencies]
+core-engine = { path = "../crates/core-engine" }
+tauri = { version = "=2.12.7", features = ["test"] }
+tauri-plugin-dialog = "=2.8.4"
+tauri-specta = { version = "=2.0.0-rc.29", features = ["typescript"] }
+specta = { version = "=2.0.0-rc.28", features = ["derive", "function"] }
+specta-typescript = "=0.0.15"
+rusqlite = { version = "=0.43.0", features = ["bundled-sqlcipher", "modern_sqlite", "functions", "backup", "serialize", "hooks"] }
+argon2 = { version = "=0.5.3", features = ["zeroize"] }
+aes-gcm = { version = "=0.10.3", features = ["zeroize"] }
+zeroize = "=1.9.2"
+chrono = "=0.4.45"
+chrono-tz = "=0.10.4"
+base64 = "=0.22.1"
+sha2 = "=0.11.1"
+hkdf = "=0.12.4"
+sha2-v010 = { package = "sha2", version = "=0.10.9" }
+uuid = { version = "=1.29.3", features = ["v4", "serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.149", features = ["arbitrary_precision"] }
+reqwest = { version = "=0.12.28", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+thiserror = "=2.0.21"
+tokio = { version = "=1.54.1", features = ["rt", "sync"] }
+tempfile = "=3.27.0"
+parking_lot = "=0.12.5"
+same-file = "=1.0.6"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "=3.6.3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "=3.6.3", features = ["windows-native"] }
+
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+keyring-core = "=1.1.0"
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-native-keyring-store = "=1.0.0"
+rusqlite = { version = "=0.43.0", features = ["bundled-sqlcipher-vendored-openssl"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+apple-native-keyring-store = { version = "=1.0.3", features = ["protected"] }
+
+[[bin]]
+name = "generate-bindings"
+path = "bin/generate-bindings.rs"
+required-features = ["binding-generator"]

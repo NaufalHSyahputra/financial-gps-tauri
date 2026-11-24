@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#eff1f5" />
+    %sveltekit.head%
+    <script id="theme-boot">
+      (() => {
+        const colors = { latte: '#eff1f5', frappe: '#303446', macchiato: '#24273a', mocha: '#1e1e2e' };
+        let preference;
+        try { preference = localStorage.getItem('fgps:theme'); } catch {}
+        if (preference === 'light') preference = 'latte';
+        if (preference === 'dark') preference = 'mocha';
+        const flavor = Object.hasOwn(colors, preference) ? preference
+          : matchMedia('(prefers-color-scheme: dark)').matches ? 'mocha' : 'latte';
+        const root = document.documentElement;
+        root.dataset.theme = flavor;
+        root.classList.toggle('dark', flavor !== 'latte');
+        root.style.backgroundColor = colors[flavor];
+        root.style.colorScheme = flavor === 'latte' ? 'light' : 'dark';
+        document.querySelector('meta[name="theme-color"]').content = colors[flavor];
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app">%sveltekit.body%</div>
+  </body>
+</html>

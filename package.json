@@ -1,0 +1,52 @@
+{
+  "name": "financial-gps",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
+  "scripts": {
+    "dev": "vite dev --port 1420 --strictPort",
+    "build": "vite build",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "tauri": "tauri",
+    "wasm:build": "node scripts/build-web-engine.mjs",
+    "predev": "npm run wasm:build",
+    "prebuild": "npm run wasm:build",
+    "audit:drivers": "node scripts/audit-frontend-drivers.mjs",
+    "test:web-driver": "node --disable-warning=ExperimentalWarning tests/web-driver.mjs",
+    "precheck": "npm run wasm:build",
+    "test:storage-ui": "node --disable-warning=ExperimentalWarning tests/storage-ui.mjs",
+    "preview": "vite preview",
+    "test:calculator": "node --experimental-strip-types --test tests/calculator.test.mjs"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "@tauri-apps/api": "2.12.5"
+  },
+  "devDependencies": {
+    "@internationalized/date": "^3.12.4",
+    "@lucide/svelte": "^1.78.0",
+    "@opentelemetry/api": "1.9.0",
+    "@sveltejs/adapter-static": "4.0.1",
+    "@sveltejs/kit": "3.4.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@tailwindcss/vite": "4.3.5",
+    "@tauri-apps/cli": "2.12.6",
+    "bits-ui": "^2.22.0",
+    "clsx": "^2.1.1",
+    "magic-string": "1.4.5",
+    "phosphor-icons-svelte": "2.1.0",
+    "playwright": "1.65.1",
+    "svelte": "5.59.1",
+    "svelte-check": "4.7.8",
+    "tailwind-merge": "^3.7.1",
+    "tailwind-variants": "^3.3.1",
+    "tailwindcss": "4.3.5",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "6.0.3",
+    "vaul-svelte": "^1.0.0-next.7",
+    "vite": "8.3.8"
+  }
+}
