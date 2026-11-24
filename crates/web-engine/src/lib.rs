@@ -129,5 +129,3 @@ pub fn decrypt_archive(archive: &[u8], credential: &str) -> std::result::Result<
         .map_err(error_value)?;
     Ok(result)
 }
-
-pub use operations::extras::parse_provider_rate;

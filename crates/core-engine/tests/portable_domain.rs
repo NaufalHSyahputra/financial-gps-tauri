@@ -1,6 +1,5 @@
 use core_engine::{
     domain::{Clock, CurrencyCode, CurrencyScale, Money, NORMALIZE_SQL_FUNCTION, normalize},
-    importers::decimal_minor,
     migrations::{INITIAL_SQL, INITIAL_VERSION, checksum},
 };
 
@@ -45,11 +44,6 @@ fn amounts_are_exact_across_minor_unit_scales() {
         )
         .is_err()
     );
-    assert_eq!(
-        decimal_minor("9.007,12", 2, ',', Some('.')).unwrap(),
-        900_712
-    );
-    assert!(decimal_minor("0,001", 2, ',', Some('.')).is_err());
 }
 
 #[test]

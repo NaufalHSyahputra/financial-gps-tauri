@@ -2,10 +2,10 @@ use super::jobs::{CancelResult, JobKind, JobOutput, JobSnapshot, JobTicket};
 use super::*;
 use crate::ledger_engine::{
     Context, DateBasis, DateRange, Deleted, Money, Mutation, Page, PageReq, VersionedId, Write,
-    accounts::*, catalog::*, dto, export::*, fx::*, reports::*, transactions::*, transfers::*,
-    workflows::*,
+    accounts::*, catalog::*, currency::Currency, dto, export::*, reports::*, transactions::*,
+    transfers::*, workflows::*,
 };
-use crate::ledger_engine::{accounts, catalog, export, fx, reports, transactions, transfers};
+use crate::ledger_engine::{accounts, catalog, currency, export, reports, transactions, transfers};
 
 pub(super) async fn blocking_read<T: Send + 'static>(
     operation: impl Fn() -> Result<T> + Send + Sync + 'static,
@@ -15,7 +15,9 @@ pub(super) async fn blocking_read<T: Send + 'static>(
     loop {
         let attempt = Arc::clone(&operation);
         match blocking(move || attempt()).await {
-            Err(error) if error.code == ErrorCode::Busy && tokio::time::Instant::now() < deadline => {
+            Err(error)
+                if error.code == ErrorCode::Busy && tokio::time::Instant::now() < deadline =>
+            {
                 // Navigation can briefly fill the bounded reader pool.
                 tokio::time::sleep(std::time::Duration::from_millis(25)).await;
             }
@@ -133,34 +135,6 @@ macro_rules! page_response {
 pub(super) use page_response;
 
 core_engine::ledger_operations!();
-#[tauri::command]
-#[specta::specta]
-pub(crate) async fn fx_provider_configure<R: Runtime>(
-    window: WebviewWindow<R>,
-    state: State<'_, Arc<Desktop>>,
-    scope: Scope,
-    input: RateProvider,
-) -> Result<ProviderStatus> {
-    authorize(window.label())?;
-    let _ = (scope, input);
-    state.check_module("fx_provider_configure")?;
-    Err(AppError::new(ErrorCode::Conflict, "feature_unavailable"))
-}
-
-#[tauri::command]
-#[specta::specta]
-pub(crate) async fn fx_refresh_start<R: Runtime>(
-    window: WebviewWindow<R>,
-    state: State<'_, Arc<Desktop>>,
-    scope: Scope,
-    input: RateRefresh,
-) -> Result<JobTicket> {
-    authorize(window.label())?;
-    let _ = (scope, input);
-    state.check_module("fx_refresh_start")?;
-    Err(AppError::new(ErrorCode::Conflict, "feature_unavailable"))
-}
-
 #[tauri::command]
 #[specta::specta]
 pub(crate) async fn transactions_export_start<R: Runtime>(

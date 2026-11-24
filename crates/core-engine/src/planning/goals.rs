@@ -4,7 +4,7 @@ use crate::{
     domain::{Result, parse_date},
     ledger_engine::{
         self as e,
-        fx::{self, ConversionStatus, Resolver},
+        currency::{self, ConversionStatus, Resolver},
         *,
     },
 };
@@ -121,10 +121,10 @@ fn measure(ctx: &Context<'_>, date: NaiveDate, draft: &GoalDraft) -> Result<Meas
         prior: 0,
     };
     for value in native {
-        *totals.entry(value.currency.clone()).or_default() += fx::minor_i128(&value.minor)?;
+        *totals.entry(value.currency.clone()).or_default() += currency::minor_i128(&value.minor)?;
         let conversion = resolver.convert(&value, &draft.target.currency, date)?;
         if let Some(amount) = conversion.displayed {
-            measured.minor += fx::minor_i128(&amount.minor)?;
+            measured.minor += currency::minor_i128(&amount.minor)?;
         }
         measured.missing += u64::from(conversion.status == ConversionStatus::Missing);
         measured.prior += u64::from(conversion.status == ConversionStatus::Prior);

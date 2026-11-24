@@ -110,7 +110,7 @@
       {#each navigation as section (section.label)}
         {#each section.items as [label, href] (href)}
           {@const key=href.split('/')[1]}
-          {#if !['dashboard','transactions','budgets','goals','recurring','assets'].includes(key) && privacy.visible(key)}
+          {#if !['dashboard','transactions','budgets','goals','recurring','assets','planning'].includes(key) && privacy.visible(key)}
             <a href={href} onclick={()=>sheet=null} class="flex min-h-11 items-center justify-between rounded-lg px-3 no-underline hover:bg-ground">
               {label}<span aria-hidden="true" class="text-muted-foreground">›</span>
             </a>

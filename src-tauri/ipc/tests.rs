@@ -363,19 +363,6 @@ fn phase_three_commands_enforce_scope_and_round_trip_financial_strings() {
         )
         .is_err()
     );
-    for (command, input) in [
-        (
-            "fx_convert",
-            json!({"amount":{"currency":"USD","minor":"345"},"quoteCurrency":"JPY"}),
-        ),
-        ("fx_rates_list", json!({"page":{"limit":10}})),
-        ("import_batches_list", json!({"page":{"limit":10}})),
-    ] {
-        assert_eq!(
-            call(command, json!({"scope":scope,"input":input})).unwrap_err()["messageKey"],
-            "feature_unavailable"
-        );
-    }
     assert_eq!(
         call(
             "budgets_get",
@@ -384,27 +371,11 @@ fn phase_three_commands_enforce_scope_and_round_trip_financial_strings() {
         .unwrap_err()["messageKey"],
         "optional_module_disabled"
     );
-    assert_eq!(
-        call(
-            "fx_provider_configure",
-            json!({"scope":scope,"input":{"provider":"frankfurter","enabled":true}})
-        )
-        .unwrap_err()["messageKey"],
-        "feature_unavailable"
-    );
     call(
         "app_preferences_set",
         json!({"patch":{"hiddenFeatures":[]}}),
     )
     .unwrap();
-    let disabled = call(
-        "fx_refresh_start",
-        json!({"scope":scope,"input":{"provider":"frankfurter",
-        "pairs":[{"baseCode":"USD","quoteCode":"EUR"}],"date":"2024-02-29"}}),
-    )
-    .unwrap_err();
-    assert_eq!(disabled["messageKey"], "feature_unavailable");
-
     let path = temp.path().join("transactions.csv");
     let grant = desktop
         .grants
@@ -447,14 +418,6 @@ fn phase_three_commands_enforce_scope_and_round_trip_financial_strings() {
     assert_eq!(prefs["theme"], "mocha");
     assert_eq!(call("app_bootstrap", json!({})).unwrap()["prefs"], prefs);
 
-    let retired = call(
-        "import_preview_start",
-        json!({"scope":scope,"input":{
-            "fileGrant":Uuid::new_v4(),"kind":"statement","accountId":account,"format":"csv"
-        }}),
-    )
-    .unwrap_err();
-    assert_eq!(retired["messageKey"], "feature_unavailable");
     let goal=call("goal_save",json!({"mutation":{"scope":scope,"requestId":Uuid::new_v4()},"input":{"draft":{
         "name":"Reserve","target":{"currency":"USD","minor":"1000"},"startsOn":"2026-01-01","targetOn":"2027-01-01",
         "state":"active","source":{"kind":"manual","current":{"currency":"USD","minor":"100"}}}}})).unwrap();
@@ -507,12 +470,6 @@ fn phase_three_commands_enforce_scope_and_round_trip_financial_strings() {
         call("goal_delete", delete_goal).unwrap_err()["messageKey"],
         "optional_module_disabled"
     );
-    let provider = call(
-        "fx_provider_configure",
-        json!({"scope":scope,"input":{"provider":"frankfurter","enabled":true}}),
-    )
-    .unwrap_err();
-    assert_eq!(provider["messageKey"], "feature_unavailable");
     call(
         "app_preferences_set",
         json!({"patch":{"hiddenFeatures":[]}}),

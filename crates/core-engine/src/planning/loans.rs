@@ -6,7 +6,7 @@ use crate::{
     domain::{Result, parse_date},
     ledger_engine::{
         Context, Money, Page, PageReq, ReadPage, ReceiptValue, VersionedId, accounts,
-        check_revision, dto, fx::major, invalid, minor, missing, money, revision, scale,
+        check_revision, currency::major, dto, invalid, minor, missing, money, revision, scale,
         transactions,
     },
 };

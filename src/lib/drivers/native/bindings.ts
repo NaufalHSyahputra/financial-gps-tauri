@@ -64,25 +64,11 @@ export const commands = {
 	payeeDelete: (mutation: Mutation_Deserialize, input: ReferenceDelete_Deserialize, options?: InvokeOptions) => typedError<Write<ReferenceChange_Serialize>, AppError_Serialize>(__TAURI_INVOKE("payee_delete", { mutation, input }, options)),
 	payeeMerge: (mutation: Mutation_Deserialize, input: PayeeMerge, options?: InvokeOptions) => typedError<Write<ReferenceChange_Serialize>, AppError_Serialize>(__TAURI_INVOKE("payee_merge", { mutation, input }, options)),
 	currenciesList: (scope: Scope, options?: InvokeOptions) => typedError<Currency[], AppError_Serialize>(__TAURI_INVOKE("currencies_list", { scope }, options)),
-	fxConvert: (scope: Scope, input: ConversionQuery_Deserialize, options?: InvokeOptions) => typedError<Conversion_Serialize, AppError_Serialize>(__TAURI_INVOKE("fx_convert", { scope, input }, options)),
-	fxRatesList: (scope: Scope, input: RateList_Deserialize, options?: InvokeOptions) => typedError<RatePage_Serialize, AppError_Serialize>(__TAURI_INVOKE("fx_rates_list", { scope, input }, options)),
-	fxRateSave: (mutation: Mutation_Deserialize, input: RateSave_Deserialize, options?: InvokeOptions) => typedError<Write<FxRate>, AppError_Serialize>(__TAURI_INVOKE("fx_rate_save", { mutation, input }, options)),
-	fxRateDelete: (mutation: Mutation_Deserialize, input: RecordId, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("fx_rate_delete", { mutation, input }, options)),
 	dashboardGet: (scope: Scope, input: DashboardQuery_Deserialize, options?: InvokeOptions) => typedError<DashboardView_Serialize, AppError_Serialize>(__TAURI_INVOKE("dashboard_get", { scope, input }, options)),
 	reportGet: (scope: Scope, input: ReportQuery_Deserialize, options?: InvokeOptions) => typedError<ReportView_Serialize, AppError_Serialize>(__TAURI_INVOKE("report_get", { scope, input }, options)),
 	calendarGet: (scope: Scope, input: CalendarQuery_Deserialize, options?: InvokeOptions) => typedError<CalendarView_Serialize, AppError_Serialize>(__TAURI_INVOKE("calendar_get", { scope, input }, options)),
 	searchGlobal: (scope: Scope, input: SearchQuery_Deserialize, options?: InvokeOptions) => typedError<SearchPage_Serialize, AppError_Serialize>(__TAURI_INVOKE("search_global", { scope, input }, options)),
-	fxProviderConfigure: (scope: Scope, input: RateProvider_Deserialize, options?: InvokeOptions) => typedError<ProviderStatus, AppError_Serialize>(__TAURI_INVOKE("fx_provider_configure", { scope, input }, options)),
-	fxRefreshStart: (scope: Scope, input: RateRefresh, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("fx_refresh_start", { scope, input }, options)),
 	transactionsExportStart: (scope: Scope, input: ExportQuery_Deserialize, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("transactions_export_start", { scope, input }, options)),
-	importTemplatesList: (scope: Scope, input: TemplateQuery_Deserialize, options?: InvokeOptions) => typedError<ImportTemplate_Serialize[], AppError_Serialize>(__TAURI_INVOKE("import_templates_list", { scope, input }, options)),
-	importTemplateSave: (mutation: Mutation_Deserialize, input: TemplateSave_Deserialize, options?: InvokeOptions) => typedError<Write<ImportTemplate_Serialize>, AppError_Serialize>(__TAURI_INVOKE("import_template_save", { mutation, input }, options)),
-	importTemplateDelete: (mutation: Mutation_Deserialize, input: Id, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("import_template_delete", { mutation, input }, options)),
-	importPreviewPage: (scope: Scope, input: ImportPage_Deserialize, options?: InvokeOptions) => typedError<ImportPreviewPage_Serialize, AppError_Serialize>(__TAURI_INVOKE("import_preview_page", { scope, input }, options)),
-	importBatchesList: (scope: Scope, input: BatchesQuery_Deserialize, options?: InvokeOptions) => typedError<ImportBatchPage_Serialize, AppError_Serialize>(__TAURI_INVOKE("import_batches_list", { scope, input }, options)),
-	importBatchGet: (scope: Scope, input: BatchQuery, options?: InvokeOptions) => typedError<ImportBatch_Serialize, AppError_Serialize>(__TAURI_INVOKE("import_batch_get", { scope, input }, options)),
-	importUndoPreview: (scope: Scope, input: UndoQuery_Deserialize, options?: InvokeOptions) => typedError<UndoPreview_Serialize, AppError_Serialize>(__TAURI_INVOKE("import_undo_preview", { scope, input }, options)),
-	importUndoApply: (mutation: Mutation_Deserialize, input: UndoApply, options?: InvokeOptions) => typedError<Write<UndoResult>, AppError_Serialize>(__TAURI_INVOKE("import_undo_apply", { mutation, input }, options)),
 	rulesList: (scope: Scope, options?: InvokeOptions) => typedError<Rule[], AppError_Serialize>(__TAURI_INVOKE("rules_list", { scope }, options)),
 	ruleGet: (scope: Scope, input: Id, options?: InvokeOptions) => typedError<Rule, AppError_Serialize>(__TAURI_INVOKE("rule_get", { scope, input }, options)),
 	ruleSave: (mutation: Mutation_Deserialize, input: RuleSave_Deserialize, options?: InvokeOptions) => typedError<Write<Rule>, AppError_Serialize>(__TAURI_INVOKE("rule_save", { mutation, input }, options)),
@@ -112,11 +98,8 @@ export const commands = {
 	assetValuationDelete: (mutation: Mutation_Deserialize, input: ConfirmedId_Deserialize, options?: InvokeOptions) => typedError<Write<Asset_Serialize>, AppError_Serialize>(__TAURI_INVOKE("asset_valuation_delete", { mutation, input }, options)),
 	assetTradeSave: (mutation: Mutation_Deserialize, input: TradeSave_Deserialize, options?: InvokeOptions) => typedError<Write<Asset_Serialize>, AppError_Serialize>(__TAURI_INVOKE("asset_trade_save", { mutation, input }, options)),
 	assetTradeDelete: (mutation: Mutation_Deserialize, input: ConfirmedId_Deserialize, options?: InvokeOptions) => typedError<Write<Asset_Serialize>, AppError_Serialize>(__TAURI_INVOKE("asset_trade_delete", { mutation, input }, options)),
-	importPreviewStart: (scope: Scope, input: ImportStart_Deserialize, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("import_preview_start", { scope, input }, options)),
-	importCommitStart: (mutation: Mutation_Deserialize, input: ImportCommit, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("import_commit_start", { mutation, input }, options)),
 	rulePreviewStart: (scope: Scope, input: RuleStart_Deserialize, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("rule_preview_start", { scope, input }, options)),
 	ruleApplyStart: (mutation: Mutation_Deserialize, input: RuleApply, options?: InvokeOptions) => typedError<JobTicket, AppError_Serialize>(__TAURI_INVOKE("rule_apply_start", { mutation, input }, options)),
-	importTemplateFile: (mutation: Mutation_Deserialize, input: TemplateFile_Deserialize, options?: InvokeOptions) => typedError<TemplateFileResult_Serialize, AppError_Serialize>(__TAURI_INVOKE("import_template_file", { mutation, input }, options)),
 	rulePackTransfer: (mutation: Mutation_Deserialize, input: RulePackTransfer_Deserialize, options?: InvokeOptions) => typedError<RuleTransferResult, AppError_Serialize>(__TAURI_INVOKE("rule_pack_transfer", { mutation, input }, options)),
 	attachmentsList: (scope: Scope, input: AttachmentList, options?: InvokeOptions) => typedError<AttachmentSummary[], AppError_Serialize>(__TAURI_INVOKE("attachments_list", { scope, input }, options)),
 	attachmentRename: (mutation: Mutation_Deserialize, input: AttachmentRename, options?: InvokeOptions) => typedError<Write<AttachmentSummary>, AppError_Serialize>(__TAURI_INVOKE("attachment_rename", { mutation, input }, options)),
@@ -754,22 +737,6 @@ export type Balance = {
 	amount: Money,
 };
 
-export type BatchQuery = {
-	batchId: string,
-};
-
-export type BatchesQuery = BatchesQuery_Serialize | BatchesQuery_Deserialize;
-
-export type BatchesQuery_Deserialize = {
-	kind?: string | null,
-	page: PageReq_Deserialize,
-};
-
-export type BatchesQuery_Serialize = {
-	kind: string | null,
-	page: PageReq_Serialize,
-};
-
 export type Bootstrap = Bootstrap_Serialize | Bootstrap_Deserialize;
 
 export type Bootstrap_Deserialize = {
@@ -1362,40 +1329,6 @@ export type ConfirmedId_Serialize = {
 	confirm: boolean | null,
 };
 
-export type Conversion = Conversion_Serialize | Conversion_Deserialize;
-
-export type ConversionQuery = ConversionQuery_Serialize | ConversionQuery_Deserialize;
-
-export type ConversionQuery_Deserialize = {
-	amount: Money,
-	quoteCurrency: string,
-	date?: string | null,
-};
-
-export type ConversionQuery_Serialize = {
-	amount: Money,
-	quoteCurrency: string,
-	date: string | null,
-};
-
-export type ConversionStatus = "exact" | "prior" | "missing";
-
-export type Conversion_Deserialize = {
-	native: Money,
-	displayed?: Money | null,
-	estimate?: Money | null,
-	status: ConversionStatus,
-	legs: FxLeg[],
-};
-
-export type Conversion_Serialize = {
-	native: Money,
-	displayed: Money | null,
-	estimate: Money | null,
-	status: ConversionStatus,
-	legs: FxLeg[],
-};
-
 export type CorrectionAction = CorrectionAction_Serialize | CorrectionAction_Deserialize;
 
 export type CorrectionAction_Deserialize = ({ void: {
@@ -1510,51 +1443,10 @@ export type Credit_Serialize = {
 	availableAfterHolds: Money | null,
 };
 
-export type CsvMapping = CsvMapping_Serialize | CsvMapping_Deserialize;
-
-export type CsvMapping_Deserialize = {
-	skipRows?: number,
-	headers?: boolean,
-	dateColumn: number,
-	descriptionColumn: number,
-	amountColumn?: number | null,
-	inflowColumn?: number | null,
-	outflowColumn?: number | null,
-	idColumn?: number | null,
-	notesColumn?: number | null,
-	providerCategoryColumn?: number | null,
-	delimiter?: string | null,
-	decimalSeparator?: string | null,
-	groupSeparator?: string | null,
-	invertSign?: boolean,
-};
-
-export type CsvMapping_Serialize = {
-	skipRows: number,
-	headers: boolean,
-	dateColumn: number,
-	descriptionColumn: number,
-	amountColumn: number | null,
-	inflowColumn: number | null,
-	outflowColumn: number | null,
-	idColumn: number | null,
-	notesColumn: number | null,
-	providerCategoryColumn: number | null,
-	delimiter: string | null,
-	decimalSeparator: string | null,
-	groupSeparator: string | null,
-	invertSign: boolean,
-};
-
 export type Currency = {
 	code: string,
 	scale: number,
 	name: string,
-};
-
-export type CurrencyPair = {
-	baseCode: string,
-	quoteCode: string,
 };
 
 export type CycleBudgetChange = CycleBudgetChange_Serialize | CycleBudgetChange_Deserialize;
@@ -1699,8 +1591,6 @@ export type DateRange_Serialize = {
 	to: string | null,
 };
 
-export type DateStyle = "iso" | "dayMonthYear" | "monthDayYear" | "yearMonthDay";
-
 export type DecimalAmount = {
 	currency: string,
 	decimal: string,
@@ -1720,8 +1610,6 @@ export type DisplayedBalance = {
 };
 
 export type Disposition = "both" | "source" | "destination" | "neither";
-
-export type DocumentFormat = "json" | "toml";
 
 export type Entry = Entry_Serialize | Entry_Deserialize;
 
@@ -1829,35 +1717,6 @@ export type FinancialCycleKind = "regular" | "short" | "extended";
 export type FlagState = "flagged" | "overdue" | "dueWithinWeek";
 
 export type Frequency = "weekly" | "biweekly" | "monthly" | "quarterly" | "semiannual" | "yearly";
-
-export type FxLeg = {
-	rateId: string,
-	date: string,
-	sourceKind: RateSource,
-	sourceKey: string,
-	pair: CurrencyPair,
-	rateDecimal: string,
-	inverted: boolean,
-};
-
-export type FxRate = {
-	id: string,
-	version: string,
-	draft: FxRateDraft,
-	createdAt: string,
-};
-
-export type FxRateDraft = {
-	pair: CurrencyPair,
-	rateDate: string,
-	rateDecimal: string,
-	sourceKind: RateSource,
-	sourceKey: string,
-};
-
-export type FxRefreshResult = {
-	rates: FxRate[],
-};
 
 export type Goal = Goal_Serialize | Goal_Deserialize;
 
@@ -2089,113 +1948,6 @@ export type IdsOrFilter_Deserialize = { kind: "ids"; ids: string[] } | { kind: "
 
 export type IdsOrFilter_Serialize = { kind: "ids"; ids: string[] } | { kind: "filter"; filter: LedgerFilter_Serialize };
 
-export type ImportBatch = ImportBatch_Serialize | ImportBatch_Deserialize;
-
-export type ImportBatchPage = ImportBatchPage_Serialize | ImportBatchPage_Deserialize;
-
-export type ImportBatchPage_Deserialize = {
-	rows: ImportBatch_Deserialize[],
-	nextCursor?: string | null,
-	revision: string,
-};
-
-export type ImportBatchPage_Serialize = {
-	rows: ImportBatch_Serialize[],
-	nextCursor?: string,
-	revision: string,
-};
-
-export type ImportBatch_Deserialize = {
-	id: string,
-	name: string,
-	accountId?: string | null,
-	kind: string,
-	format: StatementFormat,
-	committedAt: string,
-	undoneAt?: string | null,
-	inserted: number,
-	updated: number,
-	skipped: number,
-};
-
-export type ImportBatch_Serialize = {
-	id: string,
-	name: string,
-	accountId: string | null,
-	kind: string,
-	format: StatementFormat,
-	committedAt: string,
-	undoneAt: string | null,
-	inserted: number,
-	updated: number,
-	skipped: number,
-};
-
-export type ImportCommit = {
-	previewToken: string,
-	rowDecisions: RowDecision[],
-};
-
-export type ImportPage = ImportPage_Serialize | ImportPage_Deserialize;
-
-export type ImportPage_Deserialize = {
-	previewToken: string,
-	status?: PreviewStatus | null,
-	page: PageReq_Deserialize,
-};
-
-export type ImportPage_Serialize = {
-	previewToken: string,
-	status: PreviewStatus | null,
-	page: PageReq_Serialize,
-};
-
-export type ImportPreview = {
-	previewToken: string,
-	revision: string,
-	format: StatementFormat,
-	ready: number,
-	duplicate: number,
-	review: number,
-	errors: number,
-};
-
-export type ImportPreviewPage = ImportPreviewPage_Serialize | ImportPreviewPage_Deserialize;
-
-export type ImportPreviewPage_Deserialize = {
-	rows: ImportPreviewRow_Deserialize[],
-	nextCursor?: string | null,
-	revision: string,
-};
-
-export type ImportPreviewPage_Serialize = {
-	rows: ImportPreviewRow_Serialize[],
-	nextCursor?: string,
-	revision: string,
-};
-
-export type ImportPreviewRow = ImportPreviewRow_Serialize | ImportPreviewRow_Deserialize;
-
-export type ImportPreviewRow_Deserialize = {
-	ordinal: number,
-	status: PreviewStatus,
-	raw?: ParsedStatementRow_Deserialize | null,
-	proposed?: TxDraft_Deserialize | null,
-	candidates: MatchCandidate[],
-	issue?: StatementIssue | null,
-	record?: StructuredRecord_Deserialize | null,
-};
-
-export type ImportPreviewRow_Serialize = {
-	ordinal: number,
-	status: PreviewStatus,
-	raw: ParsedStatementRow_Serialize | null,
-	proposed: TxDraft_Serialize | null,
-	candidates: MatchCandidate[],
-	issue: StatementIssue | null,
-	record: StructuredRecord_Serialize | null,
-};
-
 export type ImportSource = ImportSource_Serialize | ImportSource_Deserialize;
 
 export type ImportSource_Deserialize = {
@@ -2214,42 +1966,6 @@ export type ImportSource_Serialize = {
 	amount: Money,
 	direction: string,
 	description: string,
-};
-
-export type ImportStart = ImportStart_Serialize | ImportStart_Deserialize;
-
-export type ImportStart_Deserialize = {
-	fileGrant: string,
-	kind: string,
-	accountId?: string | null,
-	format?: StatementFormat | null,
-	templateId?: string | null,
-	parserOptions?: ParserOptions_Deserialize | null,
-	detectDuplicates?: boolean | null,
-};
-
-export type ImportStart_Serialize = {
-	fileGrant: string,
-	kind: string,
-	accountId: string | null,
-	format: StatementFormat | null,
-	templateId: string | null,
-	parserOptions: ParserOptions_Serialize | null,
-	detectDuplicates: boolean | null,
-};
-
-export type ImportTemplate = ImportTemplate_Serialize | ImportTemplate_Deserialize;
-
-export type ImportTemplate_Deserialize = {
-	id: string,
-	version: string,
-	draft: TemplateDraft_Deserialize,
-};
-
-export type ImportTemplate_Serialize = {
-	id: string,
-	version: string,
-	draft: TemplateDraft_Serialize,
 };
 
 export type Installment = {
@@ -2341,13 +2057,13 @@ export type InstallmentRef = {
 
 export type InstallmentScope = "this" | "future" | "all";
 
-export type JobKind = "fxRefresh" | "transactionsExport" | "importPreview" | "importCommit" | "rulePreview" | "ruleApply" | "attachmentAdd" | "backupCreate" | "restorePreview" | "restoreApply" | "ledgerChangeProtection";
+export type JobKind = "transactionsExport" | "rulePreview" | "ruleApply" | "attachmentAdd" | "backupCreate" | "restorePreview" | "restoreApply" | "ledgerChangeProtection";
 
 export type JobOutput = JobOutput_Serialize | JobOutput_Deserialize;
 
-export type JobOutput_Deserialize = { kind: "fxRefresh"; value: Write<FxRefreshResult> } | { kind: "transactionsExport"; value: FileResult } | { kind: "importPreview"; value: ImportPreview } | { kind: "importCommit"; value: Write<ImportBatch_Deserialize> } | { kind: "rulePreview"; value: RulePreview } | { kind: "ruleApply"; value: Write<RuleApplyResult> } | { kind: "attachmentAdd"; value: Write<AttachmentWriteResult> } | { kind: "backupCreate"; value: BackupSummary_Deserialize } | { kind: "restorePreview"; value: RestorePreview } | { kind: "restoreApply"; value: LedgerSession } | { kind: "ledgerChangeProtection"; value: LedgerSession };
+export type JobOutput_Deserialize = { kind: "transactionsExport"; value: FileResult } | { kind: "rulePreview"; value: RulePreview } | { kind: "ruleApply"; value: Write<RuleApplyResult> } | { kind: "attachmentAdd"; value: Write<AttachmentWriteResult> } | { kind: "backupCreate"; value: BackupSummary_Deserialize } | { kind: "restorePreview"; value: RestorePreview } | { kind: "restoreApply"; value: LedgerSession } | { kind: "ledgerChangeProtection"; value: LedgerSession };
 
-export type JobOutput_Serialize = { kind: "fxRefresh"; value: Write<FxRefreshResult> } | { kind: "transactionsExport"; value: FileResult } | { kind: "importPreview"; value: ImportPreview } | { kind: "importCommit"; value: Write<ImportBatch_Serialize> } | { kind: "rulePreview"; value: RulePreview } | { kind: "ruleApply"; value: Write<RuleApplyResult> } | { kind: "attachmentAdd"; value: Write<AttachmentWriteResult> } | { kind: "backupCreate"; value: BackupSummary_Serialize } | { kind: "restorePreview"; value: RestorePreview } | { kind: "restoreApply"; value: LedgerSession } | { kind: "ledgerChangeProtection"; value: LedgerSession };
+export type JobOutput_Serialize = { kind: "transactionsExport"; value: FileResult } | { kind: "rulePreview"; value: RulePreview } | { kind: "ruleApply"; value: Write<RuleApplyResult> } | { kind: "attachmentAdd"; value: Write<AttachmentWriteResult> } | { kind: "backupCreate"; value: BackupSummary_Serialize } | { kind: "restorePreview"; value: RestorePreview } | { kind: "restoreApply"; value: LedgerSession } | { kind: "ledgerChangeProtection"; value: LedgerSession };
 
 export type JobSnapshot = JobSnapshot_Serialize | JobSnapshot_Deserialize;
 
@@ -2614,13 +2330,6 @@ export type LoanTerms = {
 
 export type Logic = "and" | "or";
 
-export type MatchCandidate = {
-	id: string,
-	bankDate: string,
-	amountMinor: string,
-	status: TxStatus,
-};
-
 export type Member = Member_Serialize | Member_Deserialize;
 
 export type MemberDraft = MemberDraft_Serialize | MemberDraft_Deserialize;
@@ -2815,54 +2524,6 @@ export type PageReq_Serialize = {
 	limit: number,
 };
 
-export type ParsedStatementRow = ParsedStatementRow_Serialize | ParsedStatementRow_Deserialize;
-
-export type ParsedStatementRow_Deserialize = {
-	ordinal: number,
-	bankDate: string,
-	direction: Direction,
-	amountMinor: string,
-	currency: string,
-	rawDescription: string,
-	notes?: string | null,
-	externalId?: string | null,
-	providerNamespace?: string | null,
-	providerCategory?: string | null,
-	status: TxStatus,
-};
-
-export type ParsedStatementRow_Serialize = {
-	ordinal: number,
-	bankDate: string,
-	direction: Direction,
-	amountMinor: string,
-	currency: string,
-	rawDescription: string,
-	notes: string | null,
-	externalId: string | null,
-	providerNamespace: string | null,
-	providerCategory: string | null,
-	status: TxStatus,
-};
-
-export type ParserOptions = ParserOptions_Serialize | ParserOptions_Deserialize;
-
-export type ParserOptions_Deserialize = {
-	dateStyle?: DateStyle | null,
-	encoding?: TextEncoding | null,
-	currency?: string | null,
-	csv?: CsvMapping_Deserialize | null,
-	providerNamespace?: string | null,
-};
-
-export type ParserOptions_Serialize = {
-	dateStyle: DateStyle | null,
-	encoding: TextEncoding | null,
-	currency: string | null,
-	csv: CsvMapping_Serialize | null,
-	providerNamespace: string | null,
-};
-
 export type Patch<T> = { change: "keep" } | { change: "set"; value: T } | { change: "clear" };
 
 export type PathGrant = {
@@ -2872,7 +2533,7 @@ export type PathGrant = {
 	expiresAt: string,
 };
 
-export type PathPurpose = "ledgerOpen" | "ledgerCreate" | "transactionExport" | "statementImport" | "templateRead" | "templateWrite" | "rulePackRead" | "rulePackWrite" | "attachmentRead" | "attachmentWrite" | "backupWrite" | "backupDirectory" | "restoreRead";
+export type PathPurpose = "ledgerOpen" | "ledgerCreate" | "transactionExport" | "rulePackRead" | "rulePackWrite" | "attachmentRead" | "attachmentWrite" | "backupWrite" | "backupDirectory" | "restoreRead";
 
 export type Payee = Payee_Serialize | Payee_Deserialize;
 
@@ -2977,8 +2638,6 @@ export type PreviewItem_Serialize = {
 	blocked: string | null,
 };
 
-export type PreviewStatus = "ready" | "error" | "duplicate" | "ambiguous" | "pendingMatch";
-
 export type Progress = Progress_Serialize | Progress_Deserialize;
 
 export type Progress_Deserialize = {
@@ -3026,76 +2685,7 @@ export type ProtectionStatus = {
 	quickUnlock: boolean,
 };
 
-export type Provider = "frankfurter";
-
-export type ProviderStatus = {
-	provider: Provider,
-	enabled: boolean,
-};
-
-export type RateList = RateList_Serialize | RateList_Deserialize;
-
-export type RateList_Deserialize = {
-	pair?: CurrencyPair | null,
-	range?: DateRange_Deserialize | null,
-	page: PageReq_Deserialize,
-};
-
-export type RateList_Serialize = {
-	pair: CurrencyPair | null,
-	range: DateRange_Serialize | null,
-	page: PageReq_Serialize,
-};
-
-export type RatePage = RatePage_Serialize | RatePage_Deserialize;
-
-export type RatePage_Deserialize = {
-	rows: FxRate[],
-	nextCursor?: string | null,
-	revision: string,
-};
-
-export type RatePage_Serialize = {
-	rows: FxRate[],
-	nextCursor?: string,
-	revision: string,
-};
-
 export type RatePeriod = "monthly" | "yearlyNominal" | "yearlyEffective";
-
-export type RateProvider = RateProvider_Serialize | RateProvider_Deserialize;
-
-export type RateProvider_Deserialize = {
-	provider: Provider,
-	enabled: boolean,
-	credential?: string | null,
-};
-
-export type RateProvider_Serialize = {
-	provider: Provider,
-	enabled: boolean,
-	credential: string | null,
-};
-
-export type RateRefresh = {
-	provider: Provider,
-	pairs: CurrencyPair[],
-	date: string,
-};
-
-export type RateSave = RateSave_Serialize | RateSave_Deserialize;
-
-export type RateSave_Deserialize = {
-	target?: VersionedId | null,
-	draft: FxRateDraft,
-};
-
-export type RateSave_Serialize = {
-	target: VersionedId | null,
-	draft: FxRateDraft,
-};
-
-export type RateSource = "manual" | "csv" | "provider";
 
 export type RecordId = {
 	id: string,
@@ -3341,13 +2931,6 @@ export type RestoreTarget_Deserialize = { kind: "new"; name: string; destination
 export type RestoreTarget_Serialize = { kind: "new"; name: string; destination: string | null } | { kind: "replace"; targetId: string };
 
 export type RestoreWarning = "newLedgerIdentity" | "localCredentialsExcluded";
-
-export type RowAction = { kind: "insert" } | { kind: "skip" } | { kind: "reconcile"; transactionId: string };
-
-export type RowDecision = {
-	ordinal: number,
-	action: RowAction,
-};
 
 export type Rule = {
 	id: string,
@@ -3680,14 +3263,6 @@ export type StatementDraft = {
 	source: StatementSource,
 };
 
-export type StatementFormat = "csv" | "ofx" | "qif" | "camt";
-
-export type StatementIssue = {
-	ordinal: number,
-	field: string,
-	code: string,
-};
-
 export type StatementQuery = StatementQuery_Serialize | StatementQuery_Deserialize;
 
 export type StatementQuery_Deserialize = {
@@ -3723,12 +3298,6 @@ export type StatementSummary = {
 export type StoragePolicy = "managed" | "portable";
 
 export type StoredState = "active" | "completed" | "paused" | "archived";
-
-export type StructuredRecord = StructuredRecord_Serialize | StructuredRecord_Deserialize;
-
-export type StructuredRecord_Deserialize = { kind: "fxRate"; value: FxRateDraft } | { kind: "assetValuation"; value: ValuationDraft } | { kind: "assetTrade"; value: TradeDraft_Deserialize };
-
-export type StructuredRecord_Serialize = { kind: "fxRate"; value: FxRateDraft } | { kind: "assetValuation"; value: ValuationDraft } | { kind: "assetTrade"; value: TradeDraft_Serialize };
 
 export type Suggestion = {
 	categoryId: string,
@@ -3766,70 +3335,6 @@ export type SyncStatus_Serialize = {
 };
 
 export type SyncToken = string;
-
-export type TemplateDraft = TemplateDraft_Serialize | TemplateDraft_Deserialize;
-
-export type TemplateDraft_Deserialize = {
-	name: string,
-	institution?: string | null,
-	format: StatementFormat,
-	schemaVersion: number,
-	options: ParserOptions_Deserialize,
-};
-
-export type TemplateDraft_Serialize = {
-	name: string,
-	institution: string | null,
-	format: StatementFormat,
-	schemaVersion: number,
-	options: ParserOptions_Serialize,
-};
-
-export type TemplateFile = TemplateFile_Serialize | TemplateFile_Deserialize;
-
-export type TemplateFileResult = TemplateFileResult_Serialize | TemplateFileResult_Deserialize;
-
-export type TemplateFileResult_Deserialize = ({ imported: Write<ImportTemplate_Deserialize> }) & { exported?: never } | ({ exported: FileResult }) & { imported?: never };
-
-export type TemplateFileResult_Serialize = ({ imported: Write<ImportTemplate_Serialize> }) & { exported?: never } | ({ exported: FileResult }) & { imported?: never };
-
-export type TemplateFile_Deserialize = {
-	direction: FileDirection,
-	grant: string,
-	templateId?: string | null,
-	format: DocumentFormat,
-};
-
-export type TemplateFile_Serialize = {
-	direction: FileDirection,
-	grant: string,
-	templateId: string | null,
-	format: DocumentFormat,
-};
-
-export type TemplateQuery = TemplateQuery_Serialize | TemplateQuery_Deserialize;
-
-export type TemplateQuery_Deserialize = {
-	format?: StatementFormat | null,
-};
-
-export type TemplateQuery_Serialize = {
-	format: StatementFormat | null,
-};
-
-export type TemplateSave = TemplateSave_Serialize | TemplateSave_Deserialize;
-
-export type TemplateSave_Deserialize = {
-	target?: VersionedId | null,
-	draft: TemplateDraft_Deserialize,
-};
-
-export type TemplateSave_Serialize = {
-	target: VersionedId | null,
-	draft: TemplateDraft_Serialize,
-};
-
-export type TextEncoding = "utf8" | "latin1" | "utf16Le" | "utf16Be";
 
 export type Theme = Theme_Serialize | Theme_Deserialize;
 
@@ -4204,57 +3709,6 @@ export type TxRow_Serialize = {
 };
 
 export type TxStatus = "posted" | "pending" | "projected";
-
-export type UndoApply = {
-	previewToken: string,
-	selectedOrdinals: number[],
-};
-
-export type UndoPreview = UndoPreview_Serialize | UndoPreview_Deserialize;
-
-export type UndoPreview_Deserialize = {
-	previewToken: string,
-	rows: UndoRow_Deserialize[],
-	revision: string,
-};
-
-export type UndoPreview_Serialize = {
-	previewToken: string,
-	rows: UndoRow_Serialize[],
-	revision: string,
-};
-
-export type UndoQuery = UndoQuery_Serialize | UndoQuery_Deserialize;
-
-export type UndoQuery_Deserialize = {
-	batchId: string,
-	selection?: number[] | null,
-};
-
-export type UndoQuery_Serialize = {
-	batchId: string,
-	selection: number[] | null,
-};
-
-export type UndoResult = {
-	batchId: string,
-	completed: number[],
-	fullyUndone: boolean,
-};
-
-export type UndoRow = UndoRow_Serialize | UndoRow_Deserialize;
-
-export type UndoRow_Deserialize = {
-	ordinal: number,
-	entityId: string,
-	blocked?: string | null,
-};
-
-export type UndoRow_Serialize = {
-	ordinal: number,
-	entityId: string,
-	blocked: string | null,
-};
 
 export type UnlockChallenge = {
 	id: string,

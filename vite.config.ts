@@ -52,6 +52,8 @@ export default defineConfig(({ mode }) => ({
       }
     })
   ],
+  // Routine builds omit the optional callback timing report. Compiler diagnostics stay enabled.
+  build: { rolldownOptions: { checks: { bundlerTimings: false } } },
   worker: { format: 'es' },
   clearScreen: false,
   server: {

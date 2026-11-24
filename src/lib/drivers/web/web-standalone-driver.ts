@@ -127,9 +127,6 @@ export class WebStandaloneDriver implements RuntimeDriver {
       await this.initialize();
       const files: PathGrant[] = [];
       const purpose = input.purpose;
-      if (purpose === 'statementImport' || purpose === 'templateRead' || purpose === 'templateWrite') {
-        throw issue('Conflict', 'feature_unavailable');
-      }
       const suggest = saveNames[purpose];
       const register = async (name: string, file?: File) => {
         const grant = await this.request<PathGrant>({ type: 'grant', name, file, purpose });

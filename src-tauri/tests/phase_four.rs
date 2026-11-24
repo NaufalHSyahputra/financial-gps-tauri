@@ -1,7 +1,6 @@
 use financial_gps::{
     crypto::Credential,
     domain::{ErrorCode, Protection, Result, parse_date},
-    importers::{self, CsvMapping, ParseConfig, ParsedRow, ParserOptions, StatementFormat},
     ledger_engine::{
         Context, Mutation, PageReq, accounts, money, new_id, staging::Stage, transactions,
     },
@@ -14,93 +13,6 @@ use serde_json::{Value, json};
 
 fn dto<T: DeserializeOwned>(json: Value) -> T {
     serde_json::from_value(json).unwrap()
-}
-fn ready(rows: &[ParsedRow]) -> &importers::ParsedStatementRow {
-    assert_eq!(rows.len(), 1);
-    match &rows[0] {
-        ParsedRow::Ready(row) => row,
-        ParsedRow::Error(error) => panic!("{error:?}"),
-    }
-}
-fn parse(
-    format: StatementFormat,
-    mut input: &[u8],
-    options: &ParserOptions,
-    currency: &str,
-    scale: u32,
-) -> Result<Vec<ParsedRow>> {
-    let mut rows = Vec::new();
-    format.parser().parse(
-        &mut input,
-        &ParseConfig {
-            options,
-            currency,
-            scale,
-        },
-        &|| false,
-        &mut |row| {
-            rows.push(row);
-            Ok(())
-        },
-    )?;
-    Ok(rows)
-}
-
-#[test]
-fn statement_formats_and_localized_csv() {
-    let options = ParserOptions {
-        csv: Some(CsvMapping {
-            delimiter: Some(';'),
-            decimal_separator: Some(','),
-            group_separator: Some('.'),
-            amount_column: None,
-            inflow_column: Some(2),
-            outflow_column: Some(3),
-            ..CsvMapping::default()
-        }),
-        ..ParserOptions::default()
-    };
-    let csv = b"\xef\xbb\xbfDate;Description;In;Out\r\n2026-01-01;Coffee;;1.234.567\r\n";
-    let rows = parse(StatementFormat::Csv, csv, &options, "IDR", 0).unwrap();
-    assert_eq!(ready(&rows).amount_minor, "1234567");
-    assert_eq!(ready(&rows).direction.as_str(), "debit");
-    assert_eq!(
-        importers::decimal_minor("1,234.56", 2, '.', Some(',')).unwrap(),
-        123456
-    );
-    assert!(importers::decimal_minor("1,23.45", 2, '.', Some(',')).is_err());
-
-    let defaults = ParserOptions::default();
-    let ofx=b"OFXHEADER:100\n<OFX><BANKTRANLIST><STMTTRN><TRNTYPE>DEBIT<DTPOSTED>20260104<TRNAMT>-7.25<NAME>Caf\xe9</STMTTRN></BANKTRANLIST><LEDGERBAL><BALAMT>10.00</LEDGERBAL></OFX>";
-    let rows = parse(StatementFormat::Ofx, ofx, &defaults, "USD", 2).unwrap();
-    let ofx = ready(&rows);
-    assert_eq!(ofx.amount_minor, "725");
-    assert_eq!(ofx.raw_description, "Café");
-    assert!(ofx.external_id.is_none());
-
-    let ambiguous = b"!Type:Bank\nD02/03/2026\nT-5.00\nPShop\n^\n";
-    let rows = parse(StatementFormat::Qif, ambiguous, &defaults, "USD", 2).unwrap();
-    assert!(matches!(&rows[0],ParsedRow::Error(error) if error.code=="ambiguous_qif_date_style"));
-    let qif = b"!Type:Bank\nD13/03/2026\nT-5.00\nPShop\n^\n";
-    assert_eq!(
-        ready(&parse(StatementFormat::Qif, qif, &defaults, "USD", 2).unwrap()).bank_date,
-        "2026-03-13"
-    );
-
-    let camt=br#"<Document><BkToCstmrStmt><Stmt><Ntry><Amt Ccy="EUR">18.99</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-01-27</Dt></BookgDt><NtryRef>entry-1</NtryRef><AddtlNtryInf>Caf&#233;</AddtlNtryInf></Ntry></Stmt></BkToCstmrStmt></Document>"#;
-    let rows = parse(StatementFormat::Camt, camt, &defaults, "EUR", 2).unwrap();
-    assert_eq!(ready(&rows).amount_minor, "1899");
-    assert_eq!(ready(&rows).raw_description, "Café");
-    assert!(
-        parse(
-            StatementFormat::Camt,
-            br#"<!DOCTYPE Document SYSTEM "file:///does-not-exist"><Document/>"#,
-            &defaults,
-            "EUR",
-            2
-        )
-        .is_err()
-    );
 }
 #[test]
 fn rule_ast_enforces_shape_and_regex_bounds() {
@@ -245,78 +157,6 @@ fn page() -> PageReq {
     }
 }
 
-#[test]
-fn staged_import_persists_identity_and_blocks_undo_after_dependency() {
-    let temp = tempfile::tempdir().unwrap();
-    let manager = LedgerManager::new(temp.path()).unwrap();
-    let scope = manager
-        .create("main", draft("import", false))
-        .unwrap()
-        .scope;
-    let id = manager
-        .write_domain("main", &scope, |tx| {
-            account(&Context::system(
-                financial_gps::storage::SqliteSession(tx),
-                &scope,
-            )?)
-        })
-        .unwrap();
-    let store = Stage::default();
-    let undo = Stage::default();
-    let config = importers::PreviewRequest {
-        account_id: id,
-        format: Some(StatementFormat::Ofx),
-        template_id: None,
-        parser_options: None,
-        detect_duplicates: None,
-    };
-    let content=b"<OFX><BANKTRANLIST><STMTTRN><DTPOSTED>20260115<TRNAMT>-10.00<FITID>one<NAME>Cafe</STMTTRN></BANKTRANLIST></OFX>";
-    let preview = || {
-        manager
-            .read_domain("main", &scope, |tx| {
-                let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-                importers::preview(&ctx, &store, "statement.ofx", content, &config, &|| false)
-            })
-            .unwrap()
-    };
-    let first = preview();
-    assert_eq!(first.ready, 1);
-    let batch = manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            importers::commit(&ctx, &store, &first.preview_token, &[], &|| false)
-        })
-        .unwrap();
-    assert_eq!(batch.inserted, 1);
-    assert_eq!(preview().duplicate, 1);
-    let before = manager
-        .read_domain("main", &scope, |tx| {
-            importers::undo_preview(
-                &Context::system(financial_gps::storage::SqliteSession(tx), &scope)?,
-                &undo,
-                &batch.id,
-                None,
-            )
-        })
-        .unwrap();
-    assert!(before.rows[0].blocked.is_none());
-    manager.write("main",&scope,|tx|{
-        tx.execute("INSERT INTO attachments VALUES(?1,?2,?1,'fixture.pdf','application/pdf',1,?3,'ready',0)",
-            rusqlite::params![new_id(),before.rows[0].entity_id,"a".repeat(64)])?;
-        Ok(())
-    }).unwrap();
-    let after = manager
-        .read_domain("main", &scope, |tx| {
-            importers::undo_preview(
-                &Context::system(financial_gps::storage::SqliteSession(tx), &scope)?,
-                &undo,
-                &batch.id,
-                None,
-            )
-        })
-        .unwrap();
-    assert!(after.rows[0].blocked.is_some());
-}
 #[test]
 fn encrypted_archive_round_trip_preserves_postings_and_attachments() {
     let temp = tempfile::tempdir().unwrap();
@@ -629,67 +469,6 @@ fn budgets_use_economic_share_and_goals_use_deadline_boundaries() {
 }
 
 #[test]
-fn fx_csv_preview_is_read_only_and_undo_reverts_the_rate() {
-    use financial_gps::ledger_engine::fx;
-    let temp = tempfile::tempdir().unwrap();
-    let manager = LedgerManager::new(temp.path()).unwrap();
-    let scope = manager
-        .create("main", draft("fx CSV", false))
-        .unwrap()
-        .scope;
-    let imports = Stage::default();
-    let undo = Stage::default();
-    let content = b"base,quote,date,rate\nUSD,EUR,2026-01-15,0.92\nBAD,USD,2026-01-15,1\n";
-    let first = manager
-        .read_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            let result =
-                importers::preview_structured(&ctx, &imports, "fx.csv", content, "fx", &|| false)?;
-            assert_eq!(fx::list(&ctx, None, None, &page())?.rows.len(), 0);
-            Ok(result)
-        })
-        .unwrap();
-    assert_eq!((first.ready, first.errors), (1, 1));
-    let batch = manager
-        .write_domain("main", &scope, |tx| {
-            importers::commit(
-                &Context::system(financial_gps::storage::SqliteSession(tx), &scope)?,
-                &imports,
-                &first.preview_token,
-                &[],
-                &|| false,
-            )
-        })
-        .unwrap();
-    let preview = manager
-        .read_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            let rates = fx::list(&ctx, None, None, &page())?;
-            assert_eq!(rates.rows[0].draft.rate_decimal, "0.92");
-            let repeated = importers::preview_structured(
-                &ctx,
-                &imports,
-                "repeated.csv",
-                content,
-                "fx",
-                &|| false,
-            )?;
-            assert_eq!(repeated.duplicate, 1);
-            importers::undo_preview(&ctx, &undo, &batch.id, None)
-        })
-        .unwrap();
-    assert!(preview.rows[0].blocked.is_none());
-    manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            assert!(importers::undo_apply(&ctx, &undo, &preview.preview_token, &[1])?.fully_undone);
-            assert!(fx::list(&ctx, None, None, &page())?.rows.is_empty());
-            Ok(())
-        })
-        .unwrap();
-}
-
-#[test]
 fn protection_transition_rekeys_a_ready_ledger_and_reopens_with_new_credentials() {
     use financial_gps::storage::OpenTarget;
     let root = tempfile::tempdir().unwrap();
@@ -750,115 +529,6 @@ fn protection_transition_rekeys_a_ready_ledger_and_reopens_with_new_credentials(
         .read_domain("main", &next.scope, |tx| {
             let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &next.scope)?;
             assert_eq!(transactions::get(&ctx, &item.row.id)?.row.id, item.row.id);
-            Ok(())
-        })
-        .unwrap();
-}
-
-#[test]
-fn statement_reconciliation_promotes_and_undo_restores_a_generated_occurrence() {
-    let temp = tempfile::tempdir().unwrap();
-    let manager = LedgerManager::new(temp.path()).unwrap();
-    let scope = manager
-        .create("main", draft("recurring statement", false))
-        .unwrap()
-        .scope;
-    let (account_id,rule,posting)=manager.write_domain("main",&scope,|tx|{
-        let ctx=Context::system(financial_gps::storage::SqliteSession(tx),&scope)?;
-        let account=account(&ctx)?;
-        let rule=recurring::save(&ctx,None,&dto(json!({"accountId":account,"amount":money("USD",1000),
-            "direction":"debit","description":"Coffee","notes":"Keep this note","frequency":"monthly","startsOn":"2026-01-15",
-            "weekendPolicy":"none","active":true})))?;
-        let occurrence=recurring::occurrence_apply(&ctx,&rule.id,"2026-01-15",&recurring::OccurrenceAction::Generate,None)?;
-        Ok((account,rule.id,occurrence.transaction_id.unwrap()))
-    }).unwrap();
-    let imports = Stage::default();
-    let undo = Stage::default();
-    let preview = manager
-        .read_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            let request = importers::PreviewRequest {
-                account_id,
-                format: Some(StatementFormat::Csv),
-                template_id: None,
-                parser_options: None,
-                detect_duplicates: None,
-            };
-            importers::preview(
-                &ctx,
-                &imports,
-                "statement.csv",
-                b"Date,Description,Amount\n2026-01-15,Coffee,-10.00\n",
-                &request,
-                &|| false,
-            )
-        })
-        .unwrap();
-    assert_eq!(preview.review, 1);
-    let ordinal = manager
-        .read_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            Ok(
-                importers::preview_rows(&ctx, &imports, &preview.preview_token, None, &page())?
-                    .rows[0]
-                    .ordinal,
-            )
-        })
-        .unwrap();
-
-    let batch = manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            let decision = importers::RowDecision {
-                ordinal,
-                action: importers::RowAction::Reconcile {
-                    transaction_id: posting.clone(),
-                },
-            };
-            let batch =
-                importers::commit(&ctx, &imports, &preview.preview_token, &[decision], &|| {
-                    false
-                })?;
-            let entry = transactions::get(&ctx, &posting)?;
-            assert_eq!(entry.draft.notes, "Keep this note");
-            assert_eq!(entry.row.status.as_str(), "posted");
-            let state: String = ctx.tx.query_row(
-                "SELECT state FROM recurring_occurrences WHERE rule_id=?1",
-                [&rule],
-                |r| r.get(0),
-            )?;
-            assert_eq!(state, "matched");
-            Ok(batch)
-        })
-        .unwrap();
-    let undo = manager
-        .read_domain("main", &scope, |tx| {
-            importers::undo_preview(
-                &Context::system(financial_gps::storage::SqliteSession(tx), &scope)?,
-                &undo,
-                &batch.id,
-                None,
-            )
-            .map(|preview| (preview, &undo))
-        })
-        .unwrap();
-    assert!(undo.0.rows[0].blocked.is_none());
-    manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            assert!(
-                importers::undo_apply(&ctx, undo.1, &undo.0.preview_token, &[ordinal])?
-                    .fully_undone
-            );
-            let entry = transactions::get(&ctx, &posting)?;
-            assert_eq!(entry.row.status.as_str(), "projected");
-            assert!(entry.sources.is_empty());
-            let state: String = ctx.tx.query_row(
-                "SELECT state FROM recurring_occurrences WHERE rule_id=?1",
-                [&rule],
-                |r| r.get(0),
-            )?;
-            assert_eq!(state, "generated");
             Ok(())
         })
         .unwrap();
@@ -999,44 +669,6 @@ fn loan_contract_limit_and_positive_rate_conserve_all_minor_units() {
         term.term_months = 1201;
         assert!(loans::calculate(&term, date).is_err());
     }
-}
-
-#[test]
-fn idr_template_export_import_is_equivalent_in_json_and_toml() {
-    use financial_gps::importers::{DocumentFormat, TemplateDraft};
-    let temp = tempfile::tempdir().unwrap();
-    let manager = LedgerManager::new(temp.path()).unwrap();
-    let scope = manager
-        .create("main", draft("Templates", false))
-        .unwrap()
-        .scope;
-    let template: TemplateDraft = dto(
-        json!({"name":"Bank IDR","institution":"Fixture","format":"csv","schemaVersion":1,
-        "options":{"currency":"IDR","dateStyle":"dayMonthYear","csv":{"dateColumn":0,"descriptionColumn":1,
-           "inflowColumn":2,"outflowColumn":3,"delimiter":";","decimalSeparator":",","groupSeparator":".","invertSign":true}}}),
-    );
-    manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-            let saved = importers::template_save(&ctx, None, &template)?;
-            let original = serde_json::to_value(&template).unwrap();
-            for format in [DocumentFormat::Json, DocumentFormat::Toml] {
-                let bytes = importers::encode_template(&saved, &format)?;
-                let decoded = importers::decode_template(&bytes, &format)?;
-                assert_eq!(serde_json::to_value(&decoded).unwrap(), original);
-                let rows = parse(
-                    StatementFormat::Csv,
-                    b"Date;Description;In;Out\n15/01/2026;Fee;;1.234.567\n",
-                    &decoded.options,
-                    "IDR",
-                    0,
-                )?;
-                assert_eq!(ready(&rows).amount_minor, "1234567");
-                assert_eq!(ready(&rows).direction.as_str(), "credit");
-            }
-            Ok(())
-        })
-        .unwrap();
 }
 
 #[test]
@@ -1410,145 +1042,6 @@ fn ledger_midnight_and_changed_system_zone_are_resolved_per_context() {
 }
 
 #[test]
-fn csv_identity_review_and_card_reconciliation_preserve_manual_fields_and_exposure() {
-    use financial_gps::ledger_engine::{VersionedId, catalog};
-    let temp = tempfile::tempdir().unwrap();
-    let manager = LedgerManager::new(temp.path()).unwrap();
-    let scope = manager
-        .create("main", draft("Card import", false))
-        .unwrap()
-        .scope;
-    let clock = At("2026-11-22T12:00:00Z".parse().unwrap());
-    let (card,id,cat,payee)=manager.write_domain("main",&scope,|tx|{
-        let ctx=&Context::new(financial_gps::storage::SqliteSession(tx),&scope,&clock)?;
-        let card=accounts::save(ctx,None,&dto(json!({"name":"Card","kind":"creditCard","currencyCode":"USD","closeDay":24,"dueDay":18,"cardLimitMinor":"10000"})))?;
-        let category=catalog::category_save(ctx,None,&dto(json!({"name":"Coffee","kind":"expense"})))?;
-        let payee=catalog::payee_save(ctx,None,&dto(json!({"name":"Coffee shop"})))?;
-        let mut posting=tx_draft(&card.id);
-        posting.bank_date="2026-11-20".into();
-        posting.status=financial_gps::ledger_engine::TxStatus::Pending;
-        posting.description="Cafe".into();
-        let posting=transactions::save(ctx,None,&posting)?;
-        Ok((card.id,posting.row.id,category.id,payee.id))
-    }).unwrap();
-    let stages = Stage::default();
-    let request = |dedup| imports_request(&card, dedup);
-    let input = b"Date,Description,Amount\n2026-11-21,Cafe,-10.00\n";
-    let preview = |bytes: &[u8], dedup| {
-        manager
-            .read_domain("main", &scope, |tx| {
-                let ctx = Context::new(financial_gps::storage::SqliteSession(tx), &scope, &clock)?;
-                importers::preview(&ctx, &stages, "card.csv", bytes, &request(dedup), &|| false)
-            })
-            .unwrap()
-    };
-    let pending = preview(input, None);
-    assert_eq!(pending.review, 1);
-    assert_eq!(preview(input, Some(false)).ready, 1);
-    let twice =
-        b"Date,Description,Amount\n2026-11-01,Stra\xc3\x9fe,-3.00\n2026-11-01,STRASSE,-3.00\n";
-    assert_eq!(preview(twice, None).review, 2);
-    assert_eq!(preview(twice, Some(false)).ready, 2);
-    let commit = |summary: &importers::ImportPreview| {
-        manager
-            .write_domain("main", &scope, |tx| {
-                let ctx = Context::new(financial_gps::storage::SqliteSession(tx), &scope, &clock)?;
-                let rows =
-                    importers::preview_rows(&ctx, &stages, &summary.preview_token, None, &page())?;
-                let choices = [importers::RowDecision {
-                    ordinal: rows.rows[0].ordinal,
-                    action: importers::RowAction::Reconcile {
-                        transaction_id: id.clone(),
-                    },
-                }];
-                importers::commit(&ctx, &stages, &summary.preview_token, &choices, &|| false)
-            })
-            .unwrap()
-    };
-    let balance = || {
-        manager
-            .read_domain("main", &scope, |tx| {
-                let ctx = Context::new(financial_gps::storage::SqliteSession(tx), &scope, &clock)?;
-                let card = accounts::get(&ctx, &card, None)?;
-                let credit = card.credit.unwrap();
-                Ok((
-                    card.balance.minor,
-                    credit.debt.minor,
-                    credit.available.unwrap().minor,
-                ))
-            })
-            .unwrap()
-    };
-    let exposure = balance();
-    assert_eq!(exposure, ("-1000".into(), "1000".into(), "9000".into()));
-    commit(&pending);
-    assert_eq!(balance(), exposure);
-    manager
-        .write_domain("main", &scope, |tx| {
-            let ctx = Context::new(financial_gps::storage::SqliteSession(tx), &scope, &clock)?;
-            let current = transactions::get(&ctx, &id)?;
-            let version = VersionedId {
-                id: id.clone(),
-                version: current.row.version,
-            };
-            let mut changes = [
-                current.draft.clone(),
-                current.draft.clone(),
-                current.draft.clone(),
-                current.draft.clone(),
-            ];
-            changes[0].bank_date = "2026-11-19".into();
-            changes[1].amount.minor = "1050".into();
-            changes[2].amount.currency = "EUR".into();
-            changes[3].direction = financial_gps::ledger_engine::Direction::Credit;
-            for draft in changes {
-                assert!(transactions::save(&ctx, Some(&version), &draft).is_err());
-            }
-            let mut edited = current.draft;
-            edited.description = "Manual description".into();
-            edited.notes = "Manual note #local".into();
-            edited.payee_id = Some(payee.clone());
-            edited.category_id = Some(cat.clone());
-            edited.reporting_date_override = Some("2026-11-22".into());
-            transactions::save(&ctx, Some(&version), &edited)?;
-            Ok(())
-        })
-        .unwrap();
-    let again = preview(input, None);
-    assert_eq!(again.review, 1);
-    commit(&again);
-    assert_eq!(balance(), exposure);
-    manager
-        .read_domain("main", &scope, |tx| {
-            let ctx = Context::new(financial_gps::storage::SqliteSession(tx), &scope, &clock)?;
-            let item = transactions::get(&ctx, &id)?;
-            assert_eq!(item.row.status.as_str(), "posted");
-            assert_eq!(item.draft.description, "Manual description");
-            assert_eq!(item.draft.notes, "Manual note #local");
-            assert_eq!(item.draft.payee_id.as_deref(), Some(payee.as_str()));
-            assert_eq!(item.draft.category_id.as_deref(), Some(cat.as_str()));
-            assert_eq!(item.row.reporting_date, "2026-11-22");
-            assert_eq!(
-                transactions::list(&ctx, &dto(json!({"accountIds":[card]})), &page(), false)?
-                    .rows
-                    .len(),
-                1
-            );
-            Ok(())
-        })
-        .unwrap();
-}
-fn imports_request(account: &str, detect_duplicates: Option<bool>) -> importers::PreviewRequest {
-    importers::PreviewRequest {
-        account_id: account.into(),
-        format: Some(StatementFormat::Csv),
-        template_id: None,
-        parser_options: None,
-        detect_duplicates,
-    }
-}
-
-#[test]
 fn two_imported_postings_link_as_one_transfer_without_recreating_either_leg() {
     use financial_gps::ledger_engine::{VersionedId, transfers};
     let temp = tempfile::tempdir().unwrap();
@@ -1563,47 +1056,42 @@ fn two_imported_postings_link_as_one_transfer_without_recreating_either_leg() {
             Ok((account(&ctx)?, account(&ctx)?))
         })
         .unwrap();
-    let stages = Stage::default();
-    let import =
-        |account: &str, bytes: &[u8]| {
-            let preview = manager
-                .read_domain("main", &scope, |tx| {
-                    importers::preview(
-                        &Context::system(financial_gps::storage::SqliteSession(tx), &scope)?,
-                        &stages,
-                        "transfer.csv",
-                        bytes,
-                        &imports_request(account, None),
-                        &|| false,
-                    )
-                })
-                .unwrap();
-            manager
-                .write_domain("main", &scope, |tx| {
-                    let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
-                    importers::commit(&ctx, &stages, &preview.preview_token, &[], &|| false)?;
-                    Ok(transactions::list(
-                        &ctx,
-                        &dto(json!({"accountIds":[account]})),
-                        &page(),
-                        false,
-                    )?
-                    .rows
-                    .remove(0))
-                })
-                .unwrap()
-        };
-    let source = import(
-        &debit,
-        b"Date,Description,Amount\n2026-11-01,Internal transfer,-10.00\n",
-    );
-    let destination = import(
-        &credit,
-        b"Date,Description,Amount\n2026-11-01,Internal transfer,10.00\n",
-    );
+    let (source, destination) = manager.write_domain("main", &scope, |tx| {
+        let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
+        let mut source = tx_draft(&debit);
+        source.bank_date = "2026-11-01".into();
+        let mut destination = source.clone();
+        destination.account_id = credit.clone();
+        destination.direction = financial_gps::ledger_engine::Direction::Credit;
+        let source = transactions::save(&ctx, None, &source)?.row;
+        let destination = transactions::save(&ctx, None, &destination)?.row;
+        for (account, posting, direction) in [(&debit, &source, "debit"), (&credit, &destination, "credit")] {
+            let batch = new_id();
+            let hash = "0".repeat(64);
+            ctx.tx.execute("INSERT INTO import_batches(id,account_id,kind,file_name,content_sha256,format,committed_at_ms,summary_json)
+                VALUES(?1,?2,'statement','legacy.csv',?3,'csv',0,'{}')", core_engine::sql::params![batch,account,hash])?;
+            ctx.tx.execute("INSERT INTO transaction_import_keys(transaction_id,batch_id,fingerprint,raw_description,raw_bank_date,
+              raw_amount_minor,raw_currency,raw_direction) VALUES(?1,?2,?3,?4,?5,1000,'USD',?6)",
+              core_engine::sql::params![posting.id,batch,hash,posting.description,posting.bank_date,direction])?;
+        }
+        Ok((source,destination))
+    }).unwrap();
     manager
         .write_domain("main", &scope, |tx| {
             let ctx = Context::system(financial_gps::storage::SqliteSession(tx), &scope)?;
+            let mut changed = transactions::get(&ctx, &source.id)?.draft;
+            changed.amount.minor = "11".into();
+            assert!(
+                transactions::save(
+                    &ctx,
+                    Some(&VersionedId {
+                        id: source.id.clone(),
+                        version: source.version.clone()
+                    }),
+                    &changed
+                )
+                .is_err()
+            );
             let choices = transfers::candidates(&ctx, &source.id, &dto(json!({})), &page())?;
             assert_eq!(choices.rows[0].posting.id, destination.id);
             let existing = |id, version| transfers::ExistingOrDraft::Existing {
@@ -1790,7 +1278,7 @@ fn goal_sources_use_ledger_values_and_asset_growth_resets_on_new_valuation() {
 #[test]
 fn budget_actual_matches_fx_pnl_and_projected_placeholders_count_once() {
     use financial_gps::{
-        ledger_engine::{DateRange, catalog, fx, reports},
+        ledger_engine::{DateRange, catalog, reports},
         planning::budgets,
     };
     let temp = tempfile::tempdir().unwrap();
@@ -1810,14 +1298,7 @@ fn budget_actual_matches_fx_pnl_and_projected_placeholders_count_once() {
             )?;
             let category =
                 catalog::category_save(&ctx, None, &dto(json!({"name":"Food","kind":"expense"})))?;
-            fx::save(
-                &ctx,
-                None,
-                &dto(
-                    json!({"pair":{"baseCode":"EUR","quoteCode":"USD"},"rateDate":"2026-05-01",
-            "rateDecimal":"2","sourceKind":"manual","sourceKey":"fixture"}),
-                ),
-            )?;
+            ctx.tx.execute("INSERT INTO fx_rates VALUES('legacy-rate','EUR','USD','2026-05-01','2','manual','fixture',0)", [])?;
             let mut posting = tx_draft(&eur.id);
             posting.amount = money("EUR", 100);
             posting.bank_date = "2026-05-05".into();

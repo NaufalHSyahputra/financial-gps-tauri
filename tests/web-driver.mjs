@@ -98,14 +98,11 @@ try {
   assert.notEqual(reopened.scope.sessionId, stored.scope.sessionId);
   console.log('PASS OPFS ledger data survives a worker and page restart');
 
-  const retired = await a.evaluate(async () => Promise.all([
-    window.fixture.commands.importPreviewStart(window.scope, { kind: 'statement', fileGrant: crypto.randomUUID() }),
-    window.fixture.commands.fxRefreshStart(window.scope, { provider: 'frankfurter', date: '2024-02-29', pairs: [] }),
-    window.fixture.commands.fxRatesList(window.scope, { page: { limit: 10 } }),
-  ]));
-  for (const result of retired) assert.equal(result.error?.messageKey, 'feature_unavailable');
+  const removed = await a.evaluate(() => ['importPreviewStart', 'fxRefreshStart', 'fxRatesList']
+    .every(name => !(name in window.fixture.commands)));
+  assert.ok(removed);
   assert.equal(counts.requests, 0);
-  console.log('PASS retired import and exchange-rate commands return a typed error without network activity');
+  console.log('PASS retired commands are absent from the browser driver');
 
   for (const version of [1, 2, 3]) {
     const legacyPath = join(temporary, `legacy-${version}.db`);

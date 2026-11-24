@@ -18,9 +18,6 @@ pub enum PathPurpose {
     LedgerOpen,
     LedgerCreate,
     TransactionExport,
-    StatementImport,
-    TemplateRead,
-    TemplateWrite,
     RulePackRead,
     RulePackWrite,
     AttachmentRead,
@@ -94,8 +91,6 @@ impl PathPurpose {
         matches!(
             self,
             Self::LedgerOpen
-                | Self::StatementImport
-                | Self::TemplateRead
                 | Self::RulePackRead
                 | Self::AttachmentRead
                 | Self::BackupDirectory
@@ -106,7 +101,6 @@ impl PathPurpose {
         matches!(
             self,
             Self::TransactionExport
-                | Self::TemplateWrite
                 | Self::RulePackWrite
                 | Self::AttachmentWrite
                 | Self::BackupWrite
@@ -120,8 +114,6 @@ fn checked(path: &Path, purpose: PathPurpose) -> Result<PathBuf> {
     let extensions: &[&str] = match purpose {
         PathPurpose::LedgerOpen | PathPurpose::LedgerCreate => &["db"],
         PathPurpose::TransactionExport => &["csv"],
-        PathPurpose::StatementImport => &[],
-        PathPurpose::TemplateRead | PathPurpose::TemplateWrite => &["json", "toml"],
         PathPurpose::RulePackRead | PathPurpose::RulePackWrite => &["json"],
         PathPurpose::AttachmentRead | PathPurpose::AttachmentWrite => {
             &["jpg", "jpeg", "png", "webp", "gif", "heic", "pdf"]
