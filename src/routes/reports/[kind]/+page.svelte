@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -16,7 +17,9 @@
   import Feedback from '../../../lib/components/Feedback.svelte';
   import ReportChart from '../../../lib/components/ReportChart.svelte';
 
-  const kind=$derived(reports.find(item=>item.path===page.params.kind) ?? reports[0]);
+  const mobile = new MediaQuery('(width < 48rem)');
+  const reportPath=$derived(page.params.kind === 'spending' ? 'income-expense' : page.params.kind);
+  const kind=$derived(reports.find(item=>item.path===reportPath) ?? reports[0]);
   let from=$state(today().slice(0,4)+'-01-01');
   let to=$state(today());
   let granularity=$state<Granularity>('month');
@@ -54,12 +57,12 @@
 <nav class="mb-5 flex flex-wrap gap-2" aria-label="Reports">
   {#each reports as item (item.kind)}<Button variant="outline"  aria-current={item.kind===kind.kind?'page':undefined} href={'/reports/'+item.path}>{item.label}</Button>{/each}
 </nav>
-<Card class="mb-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+<Card class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
   <Label class="field">From<Input type="date" bind:value={from}/></Label>
   <Label class="field">Through<Input type="date" bind:value={to}/></Label>
   <Label class="field">Group by<NativeSelect bind:value={granularity}><option value="month">Month</option><option value="week">Week</option><option value="day">Day</option></NativeSelect></Label>
   <Label class="field">Account<NativeSelect bind:value={accountId}><option value="">All accounts</option>{#each accounts.value??[] as item (item.id)}<option value={item.id}>{item.account.name}</option>{/each}</NativeSelect></Label>
-  <Label class="field">Category<NativeSelect bind:value={categoryId}><option value="">All categories</option>{#each categories.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
+  <Label class="field max-sm:col-span-2">Category<NativeSelect bind:value={categoryId}><option value="">All categories</option>{#each categories.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
 </Card>
 <Feedback error={report.error||task.error} loading={report.loading}/>
 {#if report.value?.balanceHistoryFloor}
@@ -68,7 +71,8 @@
 {#if report.value}
   <p class="mb-3 text-sm text-muted-foreground">Totals include amounts in {session.active?.baseCurrency}.</p>
   {#if graph}<Card class="mb-5"><ReportChart {series} label={kind.label}/></Card>{/if}
-  <div class="table-wrap">
+  {#if !mobile.current}
+  <div class="table-wrap hidden md:block">
     <Table contained={false}><TableHeader><TableRow><TableHead>Period</TableHead>{#if kind.kind==='incomeVsExpense'||kind.kind==='categoryTrends'}<TableHead>Income</TableHead><TableHead>Expense</TableHead>{:else if kind.kind==='cashFlow'}<TableHead>Recorded</TableHead><TableHead>Expected</TableHead>{:else}<TableHead>Net worth</TableHead>{/if}</TableRow></TableHeader>
     <TableBody>
       {#each report.value.points as point (point.date)}
@@ -82,6 +86,36 @@
       {/each}
     </TableBody></Table>
   </div>
+  {:else}
+  <ul class="space-y-2 md:hidden" aria-label="Report periods">
+    {#each report.value.points as point (point.date)}
+      <li class="panel space-y-2">
+        <a href={drill(point.date,categoryId,kind.kind==='cashFlow'?'bank':'reporting')} class="mobile-touch-link font-semibold underline">{privacy.date(point.date)}</a>
+        <dl class="grid grid-cols-2 gap-2 text-sm">
+          {#if kind.kind==='incomeVsExpense'||kind.kind==='categoryTrends'}
+            <div><dt class="text-muted-foreground">Income</dt><dd class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'reporting','credit')} aria-label="View income transactions">{privacy.money(point.income?.reliable)}</a></dd></div>
+            <div><dt class="text-muted-foreground">Expense</dt><dd class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'reporting','debit')} aria-label="View expense transactions">{privacy.money(point.expense?.reliable)}</a></dd></div>
+          {:else if kind.kind==='cashFlow'}
+            <div><dt class="text-muted-foreground">Recorded</dt><dd class="numeric min-h-11 content-center">{privacy.money(point.booked?.reliable)}</dd></div>
+            <div><dt class="text-muted-foreground">Expected</dt><dd class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'effective')} aria-label="View forecast transactions">{privacy.money(point.forecast?.reliable)}</a></dd></div>
+          {:else}
+            <div><dt class="text-muted-foreground">Net worth</dt><dd class="numeric">{privacy.money(point.netWorth?.reliable)}</dd></div>
+          {/if}
+        </dl>
+        {#if point.categories.length}
+          <ul class="divide-y divide-line border-t border-line">
+            {#each point.categories as category,index (index)}
+              <li class="grid grid-cols-2 items-center gap-2">
+                <a href={drill(point.date,category.categoryId)} class="mobile-touch-link underline">{categories.value?.rows.find(item=>item.id===category.categoryId)?.draft.name ?? 'Uncategorized'}</a>
+                <span class="numeric text-right">{privacy.money(category.amount.reliable)}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </li>
+    {/each}
+  </ul>
+  {/if}
 {/if}
 
 {#if report.value?.separatePostings.length}

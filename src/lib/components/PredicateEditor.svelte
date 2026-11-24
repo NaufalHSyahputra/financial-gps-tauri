@@ -19,11 +19,12 @@
       field==='ignored'?{type:'boolean',value:false}:{type:'text',value:field==='status'?'posted':field==='type'?'debit':''}};
   }
 </script>
-<div class="grid items-end gap-2 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+<div class="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2 rounded-lg border border-line p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
   <Label class="field">Field<NativeSelect value={predicate.field} onchange={event=>change(event.currentTarget.value as Field)}>{#each fields as [field,label] (field)}<option value={field}>{label}</option>{/each}</NativeSelect></Label>
-  <Label class="field">Operator<NativeSelect bind:value={predicate.operator}>{#each operators as [operator,label] (operator)}<option value={operator}>{label}</option>{/each}</NativeSelect></Label>
+  <Label class="field max-sm:col-span-2">Operator<NativeSelect bind:value={predicate.operator}>{#each operators as [operator,label] (operator)}<option value={operator}>{label}</option>{/each}</NativeSelect></Label>
+  <div class="min-w-0 max-sm:col-span-2">
   {#if predicate.value.type==='amount'}
-    <div class="grid grid-cols-2 gap-1">
+    <div class="grid gap-2 sm:grid-cols-2 sm:gap-1">
       <Label class="field">Currency<NativeSelect bind:value={predicate.value.value.currency}>{#each privacy.currencies as currency (currency.code)}<option value={currency.code}>{currency.code}</option>{/each}</NativeSelect></Label>
       <Label class="field">Value<Input type={privacy.masked?'password':'text'} inputmode="decimal" bind:value={predicate.value.value.decimal}/></Label>
     </div>
@@ -36,5 +37,8 @@
   {:else}
     <Label class="field">Value<Input required type={predicate.field==='bankDate'?'date':'text'} bind:value={predicate.value.value}/></Label>
   {/if}
-  <RowActions deleteLabel="Remove condition" onDelete={remove}/>
+  </div>
+  <div class="max-sm:col-start-2 max-sm:row-start-1">
+    <RowActions deleteLabel="Remove condition" onDelete={remove}/>
+  </div>
 </div>

@@ -28,8 +28,8 @@
       : 'grid-cols-[auto_minmax(0,1fr)_minmax(0,max-content)]']}>
     <TransactionCategoryIcon {row} size="md"/>
     <span class="min-w-0">
-      <span class="block truncate text-sm font-semibold">{title}</span>
-      <span class="block truncate text-xs text-muted-foreground">{[account,classification].filter(Boolean).join(' · ')}</span>
+      <span class="block wrap-anywhere text-sm font-semibold">{title}</span>
+      <span class="block wrap-anywhere text-xs text-muted-foreground">{[account,classification].filter(Boolean).join(' · ')}</span>
       {#if row.status!=='posted'}<span class={["block text-xs", row.status === "pending" ? "text-pending" : "text-info"]}>{row.status==='pending'?'Pending':'Expected'}</span>{/if}
     </span>
     <span class={actions ? 'col-start-2 min-w-0 wrap-anywhere text-left sm:col-start-3 sm:max-w-36 sm:text-right' : 'max-w-36 text-right'}>

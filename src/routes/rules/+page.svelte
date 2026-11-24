@@ -1,5 +1,6 @@
 <script lang="ts">
   const modalForm = $props.id();
+  import { MediaQuery } from 'svelte/reactivity';
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
@@ -17,6 +18,7 @@
   import Modal from '../../lib/components/Modal.svelte';
   import PredicateEditor from '../../lib/components/PredicateEditor.svelte';
 
+  const mobile = new MediaQuery('(width < 48rem)');
   const rules=query(()=>session.call(commands.rulesList(session.scope)));
   const categories=query(()=>session.call(commands.categoriesList(session.scope,{page:pageRequest(null,200)})));
   const payees=query(()=>session.call(commands.payeesList(session.scope,{page:pageRequest(null,200)})));
@@ -87,23 +89,41 @@
 <Heading title="Categorization rules"><Button variant="default"  onclick={()=>edit()}>New rule</Button></Heading>
 <Feedback error={task.error||rules.error} loading={rules.loading}/>
 {#if done}<Card as="p" class="mb-4" role="status">{done}</Card>{/if}
-<Card class="mb-4 flex flex-wrap items-end gap-3">
-  <Label class="field">Rule pack conflicts<NativeSelect bind:value={collision}><option value="reject">Reject import</option><option value="skip">Skip matching names</option><option value="replace">Replace matching rules</option></NativeSelect></Label>
-  <Button variant="outline" onclick={()=>pack('import')}>Import rule pack…</Button><Button variant="outline" onclick={()=>pack('export')}>Export rule pack…</Button>
-  <Label class="field">Retroactive preview<NativeSelect bind:value={policy}><option value="preserve">Preserve manual edits</option><option value="allowExplicit">Review replacing manual edits</option></NativeSelect></Label>
+<Card class="mb-4 flex flex-wrap items-end gap-3 max-md:grid max-md:grid-cols-2">
+  <Label class="field max-md:col-span-2">Rule pack conflicts<NativeSelect bind:value={collision}><option value="reject">Reject import</option><option value="skip">Skip matching names</option><option value="replace">Replace matching rules</option></NativeSelect></Label>
+  <Button variant="outline" class="max-md:px-2 max-md:whitespace-normal" onclick={()=>pack('import')}>Import rule pack…</Button>
+  <Button variant="outline" class="max-md:px-2 max-md:whitespace-normal" onclick={()=>pack('export')}>Export rule pack…</Button>
+  <Label class="field max-md:col-span-2">Retroactive preview<NativeSelect bind:value={policy}><option value="preserve">Preserve manual edits</option><option value="allowExplicit">Review replacing manual edits</option></NativeSelect></Label>
 </Card>
+{#snippet ruleActions(rule: Rule, index: number)}
+  <RowActions itemName={rule.draft.name} onEdit={()=>edit(rule)} onDelete={()=>deleting=rule}
+    extraActions={[
+      {id:'preview',label:'Preview apply',disabled:!rule.draft.enabled||!rule.draft.applyExisting,onclick:()=>dryRun(rule.id)},
+      {id:'up',label:'Move up',separatorBefore:true,disabled:index===0,onclick:()=>reorder(index,-1)},
+      {id:'down',label:'Move down',disabled:index===(rules.value?.length??0)-1,onclick:()=>reorder(index,1)}
+    ]}/>
+{/snippet}
+{#if mobile.current}
+  <ul class="space-y-2" aria-label="Rules">
+    {#each rules.value??[] as rule,index (rule.id)}
+      <li class="panel">
+        <h2 class="font-medium wrap-anywhere">{rule.draft.name}</h2>
+        <div class="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p class="text-sm text-muted-foreground">Priority {index+1} · {rule.draft.enabled?'Enabled':'Disabled'}</p>
+          {@render ruleActions(rule, index)}
+        </div>
+      </li>
+    {:else}<li class="panel">No rules configured.</li>{/each}
+  </ul>
+{:else}
 <div class="table-wrap"><Table contained={false}><TableHeader><TableRow><TableHead>Priority</TableHead><TableHead>Rule</TableHead><TableHead>State</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
   {#each rules.value??[] as rule,index (rule.id)}
     <TableRow><TableCell class="numeric">{index+1}</TableCell>
       <TableCell>{rule.draft.name}</TableCell><TableCell>{rule.draft.enabled?'Enabled':'Disabled'}</TableCell>
-      <TableCell class="text-right"><RowActions itemName={rule.draft.name} onEdit={()=>edit(rule)} onDelete={()=>deleting=rule}
-        extraActions={[
-          {id:'preview',label:'Preview apply',disabled:!rule.draft.enabled||!rule.draft.applyExisting,onclick:()=>dryRun(rule.id)},
-          {id:'up',label:'Move up',separatorBefore:true,disabled:index===0,onclick:()=>reorder(index,-1)},
-          {id:'down',label:'Move down',disabled:index===(rules.value?.length??0)-1,onclick:()=>reorder(index,1)}
-        ]}/></TableCell></TableRow>
+      <TableCell class="text-right">{@render ruleActions(rule, index)}</TableCell></TableRow>
   {:else}<TableRow><TableCell colspan={4}>No rules configured.</TableCell></TableRow>{/each}
 </TableBody></Table></div>
+{/if}
 {#if form}<Modal title={selected?'Edit rule':'New rule'} close={()=>form=false}>
   <form id={modalForm + '-rule'} class="space-y-4" onsubmit={save}>
     <Label class="field">Rule name<Input required bind:value={draft.name}/></Label>

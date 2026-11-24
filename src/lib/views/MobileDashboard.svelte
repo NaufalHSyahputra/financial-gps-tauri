@@ -86,7 +86,7 @@
     <div class="mobile-scroll-strip -mx-4 snap-x snap-mandatory scroll-px-4 px-4 pb-1 md:hidden">
       {#each wallet.value?.accounts??[] as item (item.id)}
         <a href={'/accounts/'+item.id} class="tactile block w-44 shrink-0 snap-start rounded-2xl border border-line bg-paper p-3 no-underline">
-          <span class="flex items-center gap-2 text-sm text-muted-foreground"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/><span class="truncate">{item.account.name}</span></span>
+          <span class="flex items-start gap-2 text-sm text-muted-foreground"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/><span class="min-w-0 wrap-anywhere">{item.account.name}</span></span>
           <span class="numeric mt-3 block font-medium">{privacy.money(item.balance)}</span>
         </a>
       {:else}
@@ -115,7 +115,7 @@
   <section aria-labelledby="wallet-activity" class="min-w-0 md:col-start-1 md:row-start-3">
     <div class="flex items-center justify-between gap-2">
       <h2 id="wallet-activity" class="section-title">Recent activity</h2>
-      <a class="inline-flex min-h-11 items-center text-sm font-medium text-status no-underline" href="/transactions">See all</a>
+      <a class="inline-flex min-h-11 items-center justify-end text-sm font-medium text-status no-underline max-md:min-w-11" href="/transactions">See all</a>
     </div>
     <Feedback error={recent.error || payees.error} loading={recent.loading}/>
     <ul class="overflow-hidden rounded-xl border border-line bg-paper md:hidden">

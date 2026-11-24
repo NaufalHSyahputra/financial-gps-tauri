@@ -17,12 +17,15 @@
   import { minorToInput } from '../money';
   import Feedback from '../components/Feedback.svelte';
   import Heading from '../components/Heading.svelte';
+  import MobileSectionSwitcher from '../components/MobileSectionSwitcher.svelte';
   import CreditMeter from '../components/CreditMeter.svelte';
   import CurrencySelect from '../components/CurrencySelect.svelte';
   import MoneyField from '../components/MoneyField.svelte';
   import Modal from '../components/Modal.svelte';
 
   let {id}: {id:string}=$props();
+  const sections = [['all', 'All'], ['details', 'Details'], ['statements', 'Statements / Loan'], ['history', 'History']] as const;
+  let selectedSection = $state<(typeof sections)[number][0]>('all');
   const data=query(()=>id==='new'?Promise.resolve(null):session.call(commands.accountGet(session.scope,{id})));
   const lines=query(()=>session.call(commands.cardLinesList(session.scope)));
   const task=createTask();
@@ -131,9 +134,10 @@
 <Heading title={id==='new'?'New account':data.value?.account.name??'Account'}>
   <Button variant="outline"  href="/accounts">All accounts</Button>{#if id!=='new'}<Button variant="outline"  href={'/transactions?account='+id}>Transactions</Button>{/if}
 </Heading>
+<MobileSectionSwitcher label="Account sections" options={sections} bind:selected={selectedSection}/>
 <Feedback error={data.error||task.error} loading={data.loading&&id!=='new'}/>
 {#if data.value}
-  <Card class="mb-4 flex flex-wrap items-center gap-3">
+  <Card class={['mb-4 flex flex-wrap items-center gap-3', selectedSection !== 'all' && selectedSection !== 'details' && 'max-md:hidden']}>
     <AccountTypeIcon kind={data.value.account.kind} wallet={data.value.account.paymentMethod==='Digital wallet'}/>
     <p class="numeric mr-auto text-2xl">{privacy.money(data.value.balance)}</p>
     <Button variant="outline" onclick={()=>{balanceAction='opening';openingReview=undefined;value='';reason='';date=today();}}>Set starting balance</Button>
@@ -144,10 +148,10 @@
       data.refresh();
     })}>{data.value.archivedOn?'Restore account':'Archive'}</Button>
   </Card>
-  {#if data.value.credit}<Card class="mb-4 max-w-xl"><h2 class="section-title">Credit card balance and limit</h2><CreditMeter credit={data.value.credit}/></Card>{/if}
+  {#if data.value.credit}<Card class={['mb-4 max-w-xl', selectedSection !== 'all' && selectedSection !== 'statements' && 'max-md:hidden']}><h2 class="section-title">Credit card balance and limit</h2><CreditMeter credit={data.value.credit}/></Card>{/if}
 {/if}
 {#if id==='new'||data.value}
-  <Card as="form" id="account-editor" class="space-y-4" onsubmit={save}>
+  <Card as="form" id="account-editor" class={['space-y-4', selectedSection !== 'all' && selectedSection !== 'details' && 'max-md:hidden']} onsubmit={save}>
     <h2 class="section-title">Account settings</h2>
     <div class="form-grid">
       <Label class="field">Name<Input required bind:value={name}/></Label><Label class="field">Institution<Input bind:value={institution}/></Label>
@@ -166,7 +170,7 @@
   </Card>
 {/if}
 {#if data.value?.account.kind==='creditCard'}
-  <Card as="section" class="mt-4"><div class="mb-3 flex items-center justify-between"><h2 class="section-title">Statement cycles</h2><Button variant="outline" onclick={()=>{statementId='';closeOn=today();dueOn='';statementSource='manual';statementForm=true;}}>Add statement</Button></div>
+  <Card as="section" class={['mt-4', selectedSection !== 'all' && selectedSection !== 'statements' && 'max-md:hidden']}><div class="mb-3 flex items-center justify-between"><h2 class="section-title">Statement cycles</h2><Button variant="outline" onclick={()=>{statementId='';closeOn=today();dueOn='';statementSource='manual';statementForm=true;}}>Add statement</Button></div>
     <Feedback error={statements.error}/>
     <div class="table-wrap"><Table contained={false}><TableHeader><TableRow><TableHead>Close date</TableHead><TableHead>Due date</TableHead><TableHead>Source</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
     {#each statements.value??[] as item (item.id)}<TableRow><TableCell>{privacy.date(item.draft.closeOn)}</TableCell><TableCell>{privacy.date(item.draft.dueOn)}</TableCell><TableCell>{item.draft.source}</TableCell>
@@ -180,7 +184,7 @@
   </Card>
 {/if}
 {#if data.value?.account.kind==='loan'}
-  <Card as="section" class="mt-4"><div class="mb-3 flex items-center justify-between"><h2 class="section-title">Loan payment plan</h2><Button variant="outline" onclick={showLoan}>{loan.value?'Edit loan terms':'Set loan terms'}</Button></div>
+  <Card as="section" class={['mt-4', selectedSection !== 'all' && selectedSection !== 'statements' && 'max-md:hidden']}><div class="mb-3 flex items-center justify-between"><h2 class="section-title">Loan payment plan</h2><Button variant="outline" onclick={showLoan}>{loan.value?'Edit loan terms':'Set loan terms'}</Button></div>
     <Feedback error={loan.error||schedule.error} loading={schedule.loading}/>
     {#if schedule.value}<div class="table-wrap"><Table contained={false}><TableHeader><TableRow><TableHead>Payment</TableHead><TableHead>Due</TableHead><TableHead>Principal</TableHead><TableHead>Interest</TableHead><TableHead>Payment amount</TableHead><TableHead>Remaining</TableHead></TableRow></TableHeader><TableBody>
     {#each schedule.value.rows as item (item.number)}<TableRow><TableCell>{item.number}</TableCell><TableCell>{privacy.date(item.dueDate)} {#if item.overdue}<Badge variant="secondary" >Overdue</Badge>{/if}</TableCell>
@@ -188,9 +192,11 @@
     </TableBody></Table></div>
     <div class="mt-3 flex gap-2"><Button variant="outline" disabled={!scheduleCursor} onclick={()=>scheduleCursor=undefined}>First page</Button><Button variant="outline" disabled={!schedule.value.nextCursor} onclick={()=>scheduleCursor=schedule.value?.nextCursor}>Next page</Button></div>{/if}
   </Card>
+{:else if data.value && data.value.account.kind !== 'creditCard' && selectedSection === 'statements'}
+  <Card class="md:hidden">Statement cycles and loan schedules are available on credit card and loan accounts.</Card>
 {/if}
 {#if openingHistory.value?.length}
-  <Card as="section" class="mt-4">
+  <Card as="section" class={['mt-4', selectedSection !== 'all' && selectedSection !== 'history' && 'max-md:hidden']}>
     <h2 class="section-title">Balance history</h2>
     <ul class="mt-2 divide-y divide-line">
       {#each openingHistory.value as entry (entry.id)}
@@ -202,6 +208,8 @@
       {/each}
     </ul>
   </Card>
+{:else if data.value && selectedSection === 'history'}
+  <Card class="md:hidden">No balance history yet.</Card>
 {/if}
 {#if balanceAction}
   {@const snapshot = balanceAction === 'opening' && data.value?.account.kind !== 'creditCard' && data.value?.account.kind !== 'loan'}

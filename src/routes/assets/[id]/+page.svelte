@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { MediaQuery } from 'svelte/reactivity';
+  const mobile = new MediaQuery('(width < 48rem)');
   const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
@@ -80,7 +82,23 @@
       modal=null;asset.refresh();history.refresh();
     });
   }
+  function historyDate(row: HistoryItem_Serialize) {
+    return row.kind === 'trade' ? row.value.draft.tradedOn : row.value.draft.valuedOn;
+  }
+  function historyEvent(row: HistoryItem_Serialize) {
+    return row.kind === 'trade' ? row.value.draft.trade.kind : 'Manual valuation';
+  }
+  function historyValue(row: HistoryItem_Serialize) {
+    if (row.kind === 'valuation') return privacy.money(row.value.draft.value);
+    const trade = row.value.draft.trade;
+    if (trade.kind !== 'split') return privacy.money(trade.gross);
+    return privacy.masked ? '••••' : trade.oldUnits + ' → ' + trade.newUnits;
+  }
 </script>
+{#snippet historyActions(row: HistoryItem_Serialize)}
+  <RowActions itemName={row.kind+' on '+privacy.date(historyDate(row))} onEdit={()=>open(row.kind,row)}
+    onDelete={()=>{item=row;modal='remove';}}/>
+{/snippet}
 <Heading title={asset.value?.draft.name??'New asset'}><Button variant="outline"  href="/assets">Assets</Button>{#if id!=='new'}<Label class="field">As of<Input type="date" bind:value={asOf} onchange={()=>cursor=null}/></Label>{/if}</Heading>
 <Feedback error={asset.error || task.error} loading={asset.loading}/>
 {#if asset.value}
@@ -113,14 +131,28 @@
 <Card as="section" id="asset-history"><div class="mb-3 flex flex-wrap items-center justify-between gap-3"><h2 class="section-title">Valuations and trades</h2><div class="flex flex-wrap gap-2"><Button variant="outline" onclick={()=>open('valuation')}>Add valuation</Button><Button variant="outline" onclick={()=>open('trade')}>Record trade</Button></div></div>
   <div class="mb-3 flex flex-wrap gap-3"><Label class="field">History<NativeSelect bind:value={view} onchange={()=>cursor=null}><option value="valuations">Valuations</option><option value="trades">Trades</option></NativeSelect></Label><Label class="field">From<Input type="date" bind:value={since} onchange={()=>cursor=null}/></Label></div>
   <Feedback error={history.error} loading={history.loading}/>
-  <div class="table-scroll"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Event</TableHead><TableHead>Value</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
+  {#if !mobile.current}
+  <div class="table-scroll hidden md:block"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Event</TableHead><TableHead>Value</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
     {#each history.value?.rows??[] as row (row.value.id)}
-      <TableRow><TableCell>{privacy.date(row.kind==='trade'?row.value.draft.tradedOn:row.value.draft.valuedOn)}</TableCell><TableCell>{row.kind==='trade'?row.value.draft.trade.kind:'Manual valuation'}</TableCell>
-        <TableCell class="numeric">{row.kind==='valuation'?privacy.money(row.value.draft.value):row.value.draft.trade.kind!=='split'?privacy.money(row.value.draft.trade.gross):privacy.masked?'••••':row.value.draft.trade.oldUnits+' → '+row.value.draft.trade.newUnits}</TableCell>
-        <TableCell class="text-right"><RowActions itemName={row.kind+' on '+privacy.date(row.kind==='trade'?row.value.draft.tradedOn:row.value.draft.valuedOn)} onEdit={()=>open(row.kind,row)}
-          onDelete={()=>{item=row;modal='remove';}}/></TableCell></TableRow>
+      <TableRow><TableCell>{privacy.date(historyDate(row))}</TableCell><TableCell>{historyEvent(row)}</TableCell>
+        <TableCell class="numeric">{historyValue(row)}</TableCell>
+        <TableCell class="text-right">{@render historyActions(row)}</TableCell></TableRow>
     {:else}<TableRow><TableCell colspan={4}>No matching activity.</TableCell></TableRow>{/each}
   </TableBody></Table></div>
+  {:else}
+  <ul class="space-y-2 md:hidden" aria-label="Asset history">
+    {#each history.value?.rows??[] as row (row.value.id)}
+      <li class="space-y-1 rounded-lg border border-line p-3">
+        <p class="font-medium capitalize">{historyEvent(row)}</p>
+        <p class="text-sm text-muted-foreground">{privacy.date(historyDate(row))}</p>
+        <div class="flex flex-wrap items-center justify-between gap-1">
+          <span class="numeric">{historyValue(row)}</span>
+          {@render historyActions(row)}
+        </div>
+      </li>
+    {:else}<li>No matching activity.</li>{/each}
+  </ul>
+  {/if}
   {#if cursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=null}>First records</Button>{/if}{#if history.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=history.value?.nextCursor??null}>More records</Button>{/if}
 </Card>
 {/if}

@@ -116,9 +116,9 @@
       </Card>
       <Card as="section">
         <h2 class="section-title">Cash forecast</h2>
-        <ol class="mt-2 divide-y divide-line">
+        <ol class="mt-2 divide-line md:divide-y">
           {#each showDays as day (day.date)}
-            <li class="py-3">
+            <li class="py-3 max-md:my-2 max-md:rounded-lg max-md:border max-md:border-line max-md:px-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <h3 class="font-semibold">{day.date === forecast.value.today ? 'Today · ' : ''}{day.date}</h3>
                 {#if !privacy.masked && day.dependsOnExpectedIncome}<span class="text-warning">Depends on expected income</span>{/if}
@@ -149,9 +149,9 @@
       <ul class="mt-2 divide-y divide-line">
         {#each forecast.value.entries as entry (entry.id)}
           <li class="py-3">
-            <div class="flex flex-wrap items-start justify-between gap-2">
-              <div><h3 class="font-semibold">{entry.name}</h3><p class="text-sm text-muted-foreground">{entry.dueOn} · {kinds[entry.kind]} · {states[entry.state]}{sourceLabels[entry.source] ? ' · ' + sourceLabels[entry.source] : ''}</p></div>
-              <span class="numeric">{privacy.money(entry.amount)}</span>
+            <div class="flex flex-wrap items-start justify-between gap-2 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:items-center">
+              <div class="max-md:col-span-2 max-md:wrap-anywhere"><h3 class="font-semibold">{entry.name}</h3><p class="text-sm text-muted-foreground">{entry.dueOn} · {kinds[entry.kind]} · {states[entry.state]}{sourceLabels[entry.source] ? ' · ' + sourceLabels[entry.source] : ''}</p></div>
+              <span class="numeric max-md:last:col-span-2">{privacy.money(entry.amount)}</span>
               {#if entry.source === 'manual'}<RowActions itemName={entry.name} onEdit={() => open(entry)} onDelete={() => open(entry, true)} />
               {:else if entry.ruleId && privacy.visible('recurring')}<Button size="sm" variant="ghost" onclick={() => openStages(entry.ruleId ?? '')}>Change amounts</Button>{/if}
             </div>

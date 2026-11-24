@@ -95,7 +95,7 @@
         {/if}
       {/if}
       <Feedback error={localError || error}/>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2 max-md:grid max-md:w-full max-md:grid-cols-2 max-md:[&>*:only-child]:col-span-2">
         {#if step > 1}<Button variant="outline" type="button" onclick={() => { step--; localError = ''; }} disabled={locked && step === 2}>Back</Button>{/if}
         <Button variant="default"  type="submit">{step < 3 ? 'Continue' : initial ? 'Start Tracking' : 'Save account'}</Button>
       </div>
