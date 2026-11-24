@@ -39,8 +39,8 @@
           <h2 class="mb-1 text-xs text-muted-foreground">{day.date.slice(-2)}</h2>
           {#each day.events as event (event.transaction.id)}
             <div class="mb-1 rounded bg-ground px-1.5 py-1 text-xs">
-              {#if event.occurrence}<a class="block truncate underline" href="/recurring">{event.transaction.description}</a>
-              {:else}<a class="block truncate underline" href={'/transactions/'+event.transaction.id}>{event.transaction.description}</a>{/if}
+              {#if event.occurrence}<a class="block truncate underline max-md:min-h-11 max-md:min-w-11 max-md:leading-11" href="/recurring">{event.transaction.description}</a>
+              {:else}<a class="block truncate underline max-md:min-h-11 max-md:min-w-11 max-md:leading-11" href={'/transactions/'+event.transaction.id}>{event.transaction.description}</a>{/if}
               <span class="numeric">{privacy.money(event.transaction.amount)}</span>
               {#if event.projected}<Badge variant="secondary" >Expected</Badge>{/if}
             </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { goto } from '$app/navigation';
   import RowActions from '#lib/components/RowActions.svelte';
   import * as Popover from '#lib/components/ui/popover/index.js';
@@ -104,7 +105,7 @@
   </div>
   <Card as="section" class="mb-5"><h2 class="section-title mb-3">Expenses</h2><div class="table-scroll"><Table contained={false}><TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Expense</TableHead><TableHead>Paid by</TableHead><TableHead>Amount</TableHead><TableHead>Shares</TableHead><TableHead class="w-px whitespace-nowrap text-right">Actions</TableHead></TableRow></TableHeader><TableBody>
     {#each data.value.expenses as row (row.id)}
-      <TableRow><TableCell>{privacy.date(row.date)}</TableCell><TableHead scope="row">{#if row.transactionId}<a href={'/transactions/'+row.transactionId}>{row.description}</a>{:else}{row.description}{/if}</TableHead><TableCell>{label(row.payerId)}</TableCell><TableCell class="numeric">{privacy.money(row.amount)}</TableCell><TableCell><Popover.Root>
+      <TableRow><TableCell>{privacy.date(row.date)}</TableCell><TableHead scope="row">{#if row.transactionId}<a class="mobile-touch-link" href={'/transactions/'+row.transactionId}>{row.description}</a>{:else}{row.description}{/if}</TableHead><TableCell>{label(row.payerId)}</TableCell><TableCell class="numeric">{privacy.money(row.amount)}</TableCell><TableCell><Popover.Root>
         <Popover.Trigger>
           {#snippet child({ props })}<Button {...props} variant="ghost" aria-label={'Allocation for '+row.description}>{row.method} · {row.shares.length}</Button>{/snippet}
         </Popover.Trigger>
@@ -130,7 +131,7 @@
 {#if mode==='group' && data.value}<GroupSettings group={data.value.group} self={self?.draft.label} close={()=>mode=null} saved={()=>{mode=null;data.refresh();}}/>
 {:else if mode}
   <Modal confirm={mode==='remove'} title={mode==='member'?'Group member':mode==='expense'?'Split expense':mode==='settlement'?'Pay back':'Remove '+deletion?.kind} close={()=>mode=null}>
-    <form class="space-y-3" onsubmit={submit}>
+    <form id={modalForm + '-group-details'} class="space-y-3" onsubmit={submit}>
       {#if mode==='remove'}<p>Remove this {deletion?.kind} from the group?</p>
       {:else if mode==='member'}<Label class="field">Name<Input bind:value={description} required/></Label>
       {:else}
@@ -151,7 +152,10 @@
           </fieldset>
         {/if}
       {/if}
-      <Feedback error={task.error}/><Button variant="outline" type="submit" class={mode==='remove'?'danger':'primary'} disabled={task.busy || mode==='expense' && !selected.length}>{mode==='remove'?'Remove':'Save'}</Button>
+      <Feedback error={task.error}/>
     </form>
+    {#snippet footer()}
+      <Button variant="outline" type="submit" form={modalForm + '-group-details'} class={mode==='remove'?'danger':'primary'} disabled={task.busy || mode==='expense' && !selected.length}>{mode==='remove'?'Remove':'Save'}</Button>
+    {/snippet}
   </Modal>
 {/if}

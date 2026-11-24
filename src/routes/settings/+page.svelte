@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -119,7 +120,7 @@
   </Card>
 </div>
 {#if section}<Modal title={section==='keychain'?'Secure vault quick unlock':'Change activity protection'} close={()=>{section=null;oldCredential='';nextCredential='';repeated='';safety='';}}>
-  <form class="space-y-3" autocomplete="off" onsubmit={securitySave}>
+  <form id={modalForm + '-security'} class="space-y-3" autocomplete="off" onsubmit={securitySave}>
     {#if section==='keychain'}
       {#if quick}<p>Require your credential when opening this activity.</p>
       {:else}<Label class="field">Current passphrase or PIN<Input type="password" autocomplete="off" bind:value={oldCredential} required/></Label>{/if}
@@ -129,6 +130,9 @@
       {#if protection==='encrypted'}<Label class="field">New passphrase or PIN<Input type="password" autocomplete="off" bind:value={nextCredential} required/></Label><Label class="field">Repeat new credential<Input type="password" autocomplete="off" bind:value={repeated} required/></Label>{/if}
       <Label class="field">Separate passphrase for safety backup (optional)<Input type="password" autocomplete="off" bind:value={safety}/></Label>
     {/if}
-    <Feedback error={securityTask.error}/><Button variant="default" type="submit"  disabled={securityTask.busy}>Confirm change</Button>
+    <Feedback error={securityTask.error}/>
   </form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-security'}  disabled={securityTask.busy}>Confirm change</Button>
+  {/snippet}
 </Modal>{/if}

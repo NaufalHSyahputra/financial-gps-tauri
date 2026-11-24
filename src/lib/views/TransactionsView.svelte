@@ -137,7 +137,7 @@
     if(next.range?.from)params.set('from',next.range.from);
     if(next.range?.to)params.set('to',next.range.to);
     if(next.pnlOnly)params.set('pnl','1');
-    void goto('/transactions?'+params,{shallow:true,replace:true});
+    if (params.toString() !== page.url.searchParams.toString()) void goto('/transactions?'+params,{shallow:true,replace:true});
   }
   function previewBulk(){
     void task.run(async()=>{
@@ -273,13 +273,17 @@
   <Modal confirm title="Delete transaction?" close={()=>deletingRow=undefined}>
     <p>Delete {deletingRow.description} from this activity?</p>
     <Feedback error={task.error}/>
-    <Button variant="destructive" class="mt-4" disabled={task.busy} onclick={deleteRow}>Confirm deletion</Button>
+    {#snippet footer()}
+      <Button variant="destructive" disabled={task.busy} onclick={deleteRow}>Confirm deletion</Button>
+    {/snippet}
   </Modal>
 {/if}
 {#if draftPreview}
   <Modal confirm={bulk==='delete'} title="Review bulk action" close={()=>draftPreview=null}>
     <Feedback error={task.error}/>
     <ul class="max-h-64 overflow-auto divide-y divide-line">{#each draftPreview.rows as row (row.id)}<li class="py-2">{row.description}{#if row.blocked}<small class="ml-2 text-muted-foreground">{row.blocked.replaceAll('_',' ')}</small>{/if}</li>{/each}</ul>
-    <Button variant="default" class="mt-4" onclick={applyBulk} disabled={task.busy || !draftPreview.rows.some(item=>!item.blocked)}>Confirm {bulk==='delete'?'deletion':'changes'}</Button>
+    {#snippet footer()}
+      <Button variant="default" onclick={applyBulk} disabled={task.busy || !draftPreview?.rows.some(item=>!item.blocked)}>Confirm {bulk==='delete'?'deletion':'changes'}</Button>
+    {/snippet}
   </Modal>
 {/if}

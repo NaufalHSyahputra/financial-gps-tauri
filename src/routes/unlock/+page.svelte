@@ -38,7 +38,7 @@
   {:else}
     <p class="mt-3 text-sm text-muted-foreground">Choose protected activity from Your activity.</p>
   {/if}
-  <a class="mt-5 inline-block text-sm font-medium text-muted-foreground underline underline-offset-4" href="/"
+  <a class="mobile-touch-link mt-5 inline-block text-sm font-medium text-muted-foreground underline underline-offset-4" href="/"
     aria-disabled={launcher.busy}
     onclick={(event) => {
       if (launcher.busy) {

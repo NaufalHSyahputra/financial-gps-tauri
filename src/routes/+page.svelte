@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -238,7 +239,7 @@
 
 {#if credentialDialog}
 <Modal title="Protect your activity" close={()=>credentialDialog=false}>
-  <form onsubmit={confirmCredential} autocomplete="off" class="grid gap-4">
+  <form id={modalForm + '-credential'} onsubmit={confirmCredential} autocomplete="off" class="grid gap-4">
     <Label class="field">
       <span>Passphrase or PIN</span>
       <Input type="password" name="credential" autocomplete="off" maxlength={1024}
@@ -249,11 +250,13 @@
       <NativeCheckbox  name="rememberKey" />
       <span>Remember this activity on this device for quick unlock</span>
     </Label>
-    <div class="flex flex-wrap items-center justify-end gap-2">
-      <Button variant="outline" type="button" onclick={() => credentialDialog=false}>Cancel</Button>
-      <Button variant="default"  type="submit">Create protected activity</Button>
-    </div>
   </form>
+  {#snippet footer()}
+    <div class="flex flex-wrap gap-2 justify-end">
+      <Button variant="outline" type="button" onclick={() => credentialDialog=false}>Cancel</Button>
+      <Button variant="default"  type="submit" form={modalForm + '-credential'}>Create protected activity</Button>
+    </div>
+  {/snippet}
 </Modal>
 {/if}
 

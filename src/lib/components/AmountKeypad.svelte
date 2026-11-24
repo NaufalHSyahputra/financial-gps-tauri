@@ -42,7 +42,7 @@
 
 <div class="space-y-3 max-md:flex max-md:min-w-0 max-md:flex-1 max-md:flex-col">
   <Label class="field">Amount ({currency})
-    <Input class="numeric text-xl" type={privacy.masked ? 'password' : 'text'} inputmode="decimal" maxlength={100} bind:ref={input}
+    <Input class="numeric text-xl" type={privacy.masked ? 'password' : 'text'} readonly={mobile.current} inputmode={mobile.current ? 'none' : 'decimal'} maxlength={100} bind:ref={input}
       bind:value oninput={() => error = ''} onkeydown={event => {
         if (event.key === '=' && math) { event.preventDefault(); equals(); }
         if (event.key === 'Enter') { event.preventDefault(); advance(); }

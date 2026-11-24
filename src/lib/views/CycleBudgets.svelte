@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
@@ -94,7 +95,7 @@
 {/if}
 {#if action}
   <Modal title={action === 'save' ? selected ? 'Edit cycle budget' : 'Add cycle budget' : action === 'delete' ? 'Remove cycle budget' : 'Copy previous cycle'} close={() => action = undefined} confirm={action === 'delete'}>
-    <form class="space-y-3" onsubmit={submit}>
+    <form id={modalForm + '-cycle-budget'} class="space-y-3" onsubmit={submit}>
       {#if action === 'save'}
         <Label class="field">Budget name<Input bind:value={name} maxlength={100} required /></Label>
         <MoneyField label="Limit in IDR" bind:value={limit} />
@@ -112,7 +113,9 @@
         <p>Remove the “{selected?.name}” budget from this cycle?</p>
       {/if}
       <Feedback error={task.error} />
-      <Button type="submit" disabled={task.busy || (action === 'save' && !categoryIds.length)}>{action === 'save' ? 'Save budget' : action === 'copy' ? 'Copy budgets' : 'Remove budget'}</Button>
     </form>
+    {#snippet footer()}
+      <Button type="submit" form={modalForm + '-cycle-budget'} disabled={task.busy || (action === 'save' && !categoryIds.length)}>{action === 'save' ? 'Save budget' : action === 'copy' ? 'Copy budgets' : 'Remove budget'}</Button>
+    {/snippet}
   </Modal>
 {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import CategoryIcon from '#lib/icons/CategoryIcon.svelte';
   import { Progress } from '#lib/components/ui/progress/index.js';
@@ -104,7 +105,7 @@
 </div>
 {#if mode}
 <Modal confirm={mode==='delete'} title={mode==='edit'?'Set budget limit':mode==='copy'?'Copy budget month':mode==='delete'?'Remove limit':'Historical suggestions'} close={()=>mode=null}>
-  <form class="space-y-3" onsubmit={action}>
+  <form id={modalForm + '-budget'} class="space-y-3" onsubmit={action}>
     {#if mode==='edit'}
       <Label class="field">Category<NativeSelect bind:value={categoryId} required><option value="">Select a category</option>{#each categories.value?.rows.filter(row=>row.draft.kind==='expense'&&!row.draft.ignored)??[] as category (category.id)}<option value={category.id}>{category.draft.name}</option>{/each}</NativeSelect></Label>
       <div class="form-grid"><CurrencySelect bind:value={currency}/><MoneyField label="Limit" bind:value={amount}/></div>
@@ -124,8 +125,11 @@
         {/each}
       </ul>
     {/if}
-    <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>{mode==='suggest'?'Calculate suggestions':mode==='delete'?'Remove limit':'Save'}</Button>
+    <Feedback error={task.error}/>
   </form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-budget'}  disabled={task.busy}>{mode==='suggest'?'Calculate suggestions':mode==='delete'?'Remove limit':'Save'}</Button>
+  {/snippet}
 </Modal>
 {/if}
   {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import { Progress } from '#lib/components/ui/progress/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -71,7 +72,7 @@
 {#if cursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=null}>First page</Button>{/if}
 {#if goals.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=goals.value?.nextCursor??null}>Next page</Button>{/if}
 {#if edit}<Modal title={target?'Edit goal':'New goal'} close={()=>edit=false}>
-  <form class="space-y-3" onsubmit={save}>
+  <form id={modalForm + '-goal'} class="space-y-3" onsubmit={save}>
     <Label class="field">Name<Input bind:value={name} required/></Label>
     <div class="form-grid"><CurrencySelect bind:value={currency}/><MoneyField label="Target amount" bind:value={amount}/></div>
     <div class="form-grid"><Label class="field">Start date<Input type="date" bind:value={start} required/></Label><Label class="field">Target date<Input type="date" bind:value={end} required/></Label></div>
@@ -79,7 +80,15 @@
     {#if source==='manual'}<MoneyField label="Current amount" bind:value={current}/>
     {:else if source!=='netWorth'}<Label class="field">Source<NativeSelect bind:value={reference} required><option value="">Select a source</option>{#each refs.value??[] as row (row.id)}<option value={row.id}>{row.name}</option>{/each}</NativeSelect></Label>{/if}
     <Label class="field">Status<NativeSelect bind:value={status}><option>active</option><option>completed</option><option>paused</option><option>archived</option></NativeSelect></Label>
-    <Feedback error={task.error || refs.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save goal</Button>
+    <Feedback error={task.error || refs.error}/>
   </form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-goal'}  disabled={task.busy}>Save goal</Button>
+  {/snippet}
 </Modal>{/if}
-{#if remove}<Modal confirm title="Delete goal" close={()=>remove=undefined}><p>Delete {remove.draft.name}?</p><Feedback error={task.error}/><Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{if(!remove)return;await session.call(commands.goalDelete(session.mutation(),{id:remove.id,confirm:true}));remove=undefined;goals.refresh();})}>Delete goal</Button></Modal>{/if}
+{#if remove}<Modal confirm title="Delete goal" close={()=>remove=undefined}><p>Delete {remove.draft.name}?</p><Feedback error={task.error}/>
+
+  {#snippet footer()}
+    <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{if(!remove)return;await session.call(commands.goalDelete(session.mutation(),{id:remove.id,confirm:true}));remove=undefined;goals.refresh();})}>Delete goal</Button>
+  {/snippet}
+</Modal>{/if}

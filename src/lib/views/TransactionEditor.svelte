@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import TransactionCategoryIcon from '#lib/icons/TransactionCategoryIcon.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
@@ -219,7 +220,7 @@
 </Heading>
 <Feedback error={task.error||data.error||accounts.error||files.error||link.error} loading={data.loading}/>
 {#if snapshot && accounts.value}
-  {#if !accounts.value.length}<Card as="p" class="">Create an <a class="underline" href="/accounts">account</a> before adding transactions.</Card>
+  {#if !accounts.value.length}<Card as="p" class="">Create an <a class="mobile-touch-link underline" href="/accounts">account</a> before adding transactions.</Card>
   {:else}
     {#if snapshot}
       <Card class="mb-4 flex flex-wrap items-center gap-4">
@@ -236,7 +237,7 @@
       {@const other=pair.source.row.id===id?pair.destination.row:pair.source.row}
       <Card as="section" class="mb-4">
         <h2 class="section-title">Linked transfer</h2>
-        <p class="mt-2"><a class="underline" href={'/transactions/'+other.id}>Other side of the transfer</a> · <span class="numeric">{privacy.money(other.amount)}</span></p>
+        <p class="mt-2"><a class="mobile-touch-link underline" href={'/transactions/'+other.id}>Other side of the transfer</a> · <span class="numeric">{privacy.money(other.amount)}</span></p>
       </Card>
     {/if}
     {#if audit.value?.length}
@@ -334,18 +335,32 @@
     {/if}
   {/if}
 {/if}
-{#if deleting}<Modal confirm title="Delete transaction?" close={()=>deleting=false}><p>This removes the transaction from the activity file.</p><Button variant="default" class="mt-4" onclick={remove}>Confirm deletion</Button><Feedback error={task.error}/></Modal>{/if}
+{#if deleting}<Modal confirm title="Delete transaction?" close={()=>deleting=false}><p>This removes the transaction from the activity file.</p><Feedback error={task.error}/>
+
+  {#snippet footer()}
+    <Button variant="default" onclick={remove}>Confirm deletion</Button>
+  {/snippet}
+</Modal>{/if}
 {#if plan}<Modal title="Installment preview" close={()=>plan=null}>
   <ul class="max-h-72 divide-y divide-line overflow-auto">{#each plan.rows as item (item.number)}<li class="flex justify-between py-2"><span>{item.number} · {privacy.date(item.bankDate)}</span><span class="numeric">{privacy.money(item.amount)}</span></li>{/each}</ul>
-  <Feedback error={task.error}/><Button variant="default" class="mt-4" onclick={applyInstallments}>Apply series</Button>
+  <Feedback error={task.error}/>
+  {#snippet footer()}
+    <Button variant="default" onclick={applyInstallments}>Apply series</Button>
+  {/snippet}
 </Modal>{/if}
 {#if rename}<Modal title="Rename attachment" close={()=>rename=null}>
   <Label class="field">File name<Input bind:value={rename.displayName}/></Label>
-  <Button variant="default" class="mt-4" onclick={()=>{const input=$state.snapshot(rename);if(input)void task.run(async()=>{await session.call(commands.attachmentRename(session.mutation(),input));rename=null;files.refresh();});}}>Save name</Button>
+
   <Feedback error={task.error}/>
+  {#snippet footer()}
+    <Button variant="default" onclick={()=>{const input=$state.snapshot(rename);if(input)void task.run(async()=>{await session.call(commands.attachmentRename(session.mutation(),input));rename=null;files.refresh();});}}>Save name</Button>
+  {/snippet}
 </Modal>{/if}
 {#if attachmentDelete}<Modal confirm title="Remove attachment?" close={()=>attachmentDelete=''}>
-  <Button variant="default"  onclick={()=>task.run(async()=>{await session.call(commands.attachmentDelete(session.mutation(),{id:attachmentDelete,confirm:true}));attachmentDelete='';files.refresh();})}>Confirm removal</Button><Feedback error={task.error}/>
+  <Feedback error={task.error}/>
+  {#snippet footer()}
+    <Button variant="default"  onclick={()=>task.run(async()=>{await session.call(commands.attachmentDelete(session.mutation(),{id:attachmentDelete,confirm:true}));attachmentDelete='';files.refresh();})}>Confirm removal</Button>
+  {/snippet}
 </Modal>{/if}
 
 {#if correctionMode}
@@ -360,13 +375,9 @@
           {#if correctionMode === 'refund'}<p>{originalId ? 'This refund will reduce spending attributed to the original purchase.' : 'This refund will appear separately from ordinary income.'}</p>{/if}
         {/if}
         <Feedback error={task.error}/>
-        <div class="flex flex-wrap gap-2">
-          <Button variant="outline" onclick={()=>{preview=undefined;request=undefined;}}>Back</Button>
-          <Button disabled={task.busy} onclick={confirmCorrection}>Confirm {correctionMode === 'correct' ? 'correction' : correctionMode}</Button>
-        </div>
       </div>
     {:else}
-      <form class="space-y-3" onsubmit={reviewCorrection}>
+      <form id={modalForm + '-correction'} class="space-y-3" onsubmit={reviewCorrection}>
         {#if correctionMode === 'refund'}
           <Label class="field">Original purchase
             <NativeSelect bind:value={originalId}>
@@ -379,8 +390,17 @@
         {/if}
         <Label class="field">Reason<Textarea bind:value={reason} maxlength={500} required/></Label>
         <Feedback error={task.error || purchases.error}/>
-        <Button type="submit" disabled={task.busy}>Review changes</Button>
       </form>
     {/if}
+    {#snippet footer()}
+    {#if preview}
+        <div class="flex flex-wrap gap-2">
+          <Button variant="outline" onclick={()=>{preview=undefined;request=undefined;}}>Back</Button>
+          <Button disabled={task.busy} onclick={confirmCorrection}>Confirm {correctionMode === 'correct' ? 'correction' : correctionMode}</Button>
+        </div>
+    {:else}
+      <Button type="submit" form={modalForm + '-correction'} disabled={task.busy}>Review changes</Button>
+    {/if}
+  {/snippet}
   </Modal>
 {/if}

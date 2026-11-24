@@ -78,13 +78,13 @@
       <Card as="section" class={layout.find(item=>item.id===id)?.width===12?'xl:col-span-2':undefined}>
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="section-title">{all.find(item=>item.id===id)?.label}</h2>
-          {#if id==='accounts'}<a href="/accounts" class="text-sm underline">All accounts</a>
-          {:else if id!=='credit'}<a href={'/reports/'+reports.find(item=>item.kind===id)?.path} class="text-sm underline">View report</a>{/if}
+          {#if id==='accounts'}<a href="/accounts" class="mobile-touch-link text-sm underline">All accounts</a>
+          {:else if id!=='credit'}<a href={'/reports/'+reports.find(item=>item.kind===id)?.path} class="mobile-touch-link text-sm underline">View report</a>{/if}
         </div>
         {#if id==='accounts'}
           <ul class="divide-y divide-line">
           {#each data.value.accounts as item (item.id)}
-            <li class="flex items-center justify-between gap-2 py-2.5"><a href={'/accounts/'+item.id} class="truncate hover:underline"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/> {item.account.name}</a><span class="numeric">{privacy.money(item.balance)}</span></li>
+            <li class="flex items-center justify-between gap-2 py-2.5"><a href={'/accounts/'+item.id} class="truncate hover:underline max-md:min-h-11 max-md:min-w-11 max-md:leading-11"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/> {item.account.name}</a><span class="numeric">{privacy.money(item.balance)}</span></li>
           {:else}<li class="text-sm text-muted-foreground">Add an account to see your balances.</li>{/each}
           </ul>
         {:else if id==='credit'}
@@ -116,6 +116,8 @@
         ]}/></div>
     </div>{/each}
     <div class="mt-4 flex flex-wrap gap-2">{#each all.filter(item=>!draft.includes(item.id)) as item (item.id)}<Button variant="outline" onclick={()=>draft=[...draft,item.id]}>Add {item.label}</Button>{/each}</div>
-    <Button variant="default" class="mt-4" disabled={task.busy} onclick={save}>Save layout</Button>
+    {#snippet footer()}
+      <Button variant="default" disabled={task.busy} onclick={save}>Save layout</Button>
+    {/snippet}
   </Modal>
 {/if}

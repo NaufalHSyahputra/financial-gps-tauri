@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import AccountTypeIcon from '#lib/icons/AccountTypeIcon.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
@@ -211,41 +212,56 @@
         <p>Use {privacy.money(privacy.amount(currency,value))} as the starting balance on {date}. Earlier transactions remain in activity and are excluded from this account balance.</p>
         {#if openingReview.preview.before}<p>Previous opening entry · {openingReview.preview.before.row.bankDate} · {privacy.money(openingReview.preview.before.row.amount)}</p>{/if}
         <Feedback error={task.error}/>
+      </div>
+    {:else}
+      <form id={modalForm + '-balance'} class="space-y-3" onsubmit={saveBalance}>
+        <MoneyField label="Signed amount" bind:value/>
+        <Label class="field">Date<Input type="date" bind:value={date} required/></Label>
+        {#if snapshot || balanceAction==='adjustment'}<Label class="field">Reason<Input required maxlength={500} bind:value={reason}/></Label>{/if}
+        <Feedback error={task.error}/>
+      </form>
+    {/if}
+    {#snippet footer()}
+    {#if openingReview}
         <div class="flex flex-wrap gap-2">
           <Button variant="outline" type="button" onclick={()=>openingReview=undefined}>Back</Button>
           <Button disabled={task.busy} onclick={confirmOpening}>Confirm snapshot</Button>
         </div>
-      </div>
     {:else}
-      <form class="space-y-3" onsubmit={saveBalance}>
-        <MoneyField label="Signed amount" bind:value/>
-        <Label class="field">Date<Input type="date" bind:value={date} required/></Label>
-        {#if snapshot || balanceAction==='adjustment'}<Label class="field">Reason<Input required maxlength={500} bind:value={reason}/></Label>{/if}
-        <Feedback error={task.error}/><Button type="submit" disabled={task.busy}>{snapshot?'Review snapshot':'Save'}</Button>
-      </form>
+      <Button type="submit" form={modalForm + '-balance'} disabled={task.busy}>{snapshot?'Review snapshot':'Save'}</Button>
     {/if}
+  {/snippet}
   </Modal>
 {/if}
 {#if statementForm}<Modal title="Card statement" close={()=>statementForm=false}>
-  <form class="space-y-3" onsubmit={saveStatement}><Label class="field">Close date<Input type="date" bind:value={closeOn} required/></Label><Label class="field">Due date<Input type="date" bind:value={dueOn} required/></Label>
-    <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save statement</Button>
+  <form id={modalForm + '-statement'} class="space-y-3" onsubmit={saveStatement}><Label class="field">Close date<Input type="date" bind:value={closeOn} required/></Label><Label class="field">Due date<Input type="date" bind:value={dueOn} required/></Label>
+    <Feedback error={task.error}/>
   </form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-statement'}  disabled={task.busy}>Save statement</Button>
+  {/snippet}
 </Modal>{/if}
-{#if loanForm}<Modal title="Loan terms" close={()=>loanForm=false}><form class="space-y-4" onsubmit={saveLoan}>
+{#if loanForm}<Modal title="Loan terms" close={()=>loanForm=false}><form id={modalForm + '-loan'} class="space-y-4" onsubmit={saveLoan}>
   <div class="form-grid"><MoneyField label="Principal" bind:value={principal}/><MoneyField label="Interest rate %" bind:value={interest}/>
     <Label class="field">Rate period<NativeSelect bind:value={period}><option value="yearlyEffective">Effective annual rate</option><option value="yearlyNominal">Simple annual rate</option><option value="monthly">Monthly</option></NativeSelect></Label>
     <Label class="field">Amortization<NativeSelect bind:value={amortization}><option value="price">Price</option><option value="sac">SAC</option></NativeSelect></Label>
     <Label class="field">Loan type<NativeSelect bind:value={loanKind}>{#each ['mortgage','auto','student','personal','other'] as type (type)}<option value={type}>{type}</option>{/each}</NativeSelect></Label>
     <Label class="field">Months<Input type="number" bind:value={months} min={1} max={1200} required/></Label><Label class="field">First payment<Input type="date" bind:value={firstPayment} required/></Label>
-  </div><Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save terms</Button>
-</form></Modal>{/if}
+  </div><Feedback error={task.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-loan'}  disabled={task.busy}>Save terms</Button>
+  {/snippet}
+</Modal>{/if}
 
 {#if removingStatement}
   <Modal confirm title="Delete card statement?" close={()=>removingStatement=''}>
     <Feedback error={task.error}/>
-    <Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{
-      await session.call(commands.cardStatementDelete(session.mutation(),{id:removingStatement}));
-      removingStatement=''; statements.refresh();
-    })}>Delete statement</Button>
+    {#snippet footer()}
+      <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{
+        await session.call(commands.cardStatementDelete(session.mutation(),{id:removingStatement}));
+        removingStatement=''; statements.refresh();
+      })}>Delete statement</Button>
+    {/snippet}
   </Modal>
 {/if}

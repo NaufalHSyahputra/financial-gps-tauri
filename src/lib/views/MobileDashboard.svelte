@@ -100,7 +100,7 @@
           <div class="border-b py-2 first:pt-0 last:border-b-0 last:pb-0">
             <h3 class="text-xs font-medium text-muted-foreground">{accountKinds[kind].label}</h3>
             {#each group as item (item.id)}
-              <a href={'/accounts/'+item.id} class="flex min-h-9 items-center justify-between gap-2 text-sm no-underline hover:text-primary-ink">
+              <a href={'/accounts/'+item.id} class="flex min-h-9 max-md:min-h-11 items-center justify-between gap-2 text-sm no-underline hover:text-primary-ink">
                 <span class="flex min-w-0 items-center gap-2"><AccountTypeIcon kind={item.account.kind} wallet={item.account.paymentMethod==='Digital wallet'}/><span class="truncate">{item.account.name}</span></span>
                 <span class="numeric min-w-0 text-right">{privacy.money(item.balance)}</span>
               </a>
