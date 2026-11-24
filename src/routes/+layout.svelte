@@ -43,6 +43,17 @@
       if (launcher.session && page.url.pathname==='/') void goto('/dashboard');
     });
     const stops: (()=>void)[]=[stopTheme, storageSync.watch()];
+    const financialDates = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura'].map(timeZone =>
+      new Intl.DateTimeFormat('en-CA', { timeZone, dateStyle: 'short' }));
+    const dayKey = () => financialDates.map(format => format.format(Date.now())).join('/');
+    let prior = dayKey();
+    const refreshFinancialDate = () => {
+      const next = dayKey();
+      if (prior !== next) { prior = next; session.financialDateTick++; }
+    };
+    const financialDateTimer = setInterval(refreshFinancialDate, 30_000);
+    window.addEventListener('focus', refreshFinancialDate);
+    stops.push(() => { clearInterval(financialDateTimer); window.removeEventListener('focus', refreshFinancialDate); });
     let alive=true;
     void jobs.listen().then(unlisten=>alive ? stops.push(unlisten) : unlisten()).catch(()=>{});
     void events.ledgerIntegrityAlert(([scope,error])=>{

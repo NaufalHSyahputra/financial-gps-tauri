@@ -267,6 +267,21 @@ pub const BALANCE_VISIBLE: &str = "t.ignored=0 AND t.status IN ('posted','pendin
     (t.status='posted' OR a.kind='credit_card') AND NOT EXISTS
     (SELECT 1 FROM categories b WHERE b.id=t.category_id AND b.ignored=1)";
 
+pub(crate) const SNAPSHOT_VISIBLE: &str = "NOT EXISTS(
+    SELECT 1 FROM account_opening_snapshots o WHERE o.account_id=t.account_id AND t.bank_date<o.effective_on
+)";
+
+pub(crate) fn opening_floor(ctx: &Context<'_>, account: &str) -> Result<Option<String>> {
+    Ok(ctx
+        .tx
+        .query_row(
+            "SELECT effective_on FROM account_opening_snapshots WHERE account_id=?1",
+            [account],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 pub fn balance(
     ctx: &Context<'_>,
     account_id: &str,
@@ -277,8 +292,19 @@ pub fn balance(
         "FROM transactions t JOIN accounts a ON a.id=t.account_id
         WHERE t.account_id=?1 AND t.bank_date<=?2 AND {BALANCE_VISIBLE}"
     );
+    let floor = opening_floor(ctx, account_id)?;
+    if floor.is_some() {
+        from.push_str(" AND ");
+        from.push_str(SNAPSHOT_VISIBLE);
+    }
     if through_id.is_some() {
-        from.push_str(" AND (t.bank_date,t.id)<=(?2,?3)");
+        if floor.is_some() {
+            from.push_str(
+                " AND ((t.bank_date,t.id)<=(?2,?3) OR (t.bank_date=?2 AND t.entry_kind='opening'))",
+            );
+        } else {
+            from.push_str(" AND (t.bank_date,t.id)<=(?2,?3)");
+        }
     }
     let day = as_of.to_string();
     let params: Vec<&str> = if let Some(id) = through_id {
@@ -440,12 +466,18 @@ pub(super) fn list_selected(
         .filter(|id| selected.is_empty() || selected.contains(id))
         .collect::<Vec<_>>();
     let mut totals = HashMap::new();
+    let has_snapshots: bool = ctx.tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM account_opening_snapshots)",
+        [],
+        |r| r.get(0),
+    )?;
     if selected.is_empty() && ids.len() > 1 {
+        let snapshot = if has_snapshots { SNAPSHOT_VISIBLE } else { "1" };
         // Visiting table pages once avoids decrypting the same pages through many account-index walks.
         totals.extend(ids.iter().map(|id| (id.clone(), 0i128)));
         let mut statement = ctx.tx.prepare_cached(&format!(
             "SELECT t.account_id,{SIGNED} FROM transactions t NOT INDEXED
-             CROSS JOIN accounts a ON a.id=t.account_id WHERE t.bank_date<=?1 AND {BALANCE_VISIBLE}"
+             CROSS JOIN accounts a ON a.id=t.account_id WHERE t.bank_date<=?1 AND {BALANCE_VISIBLE} AND {snapshot}"
         ))?;
         let mut rows = statement.query([&day])?;
         while let Some(row) = rows.next()? {
@@ -609,7 +641,8 @@ pub fn delete(ctx: &Context<'_>, target: &VersionedId, confirm: bool) -> Result<
         OR EXISTS(SELECT 1 FROM import_batches WHERE account_id=?1)
         OR EXISTS(SELECT 1 FROM loans WHERE account_id=?1)
         OR EXISTS(SELECT 1 FROM goals WHERE account_id=?1)
-        OR EXISTS(SELECT 1 FROM recurring_rules WHERE account_id=?1)",
+        OR EXISTS(SELECT 1 FROM recurring_rules WHERE account_id=?1)
+        OR EXISTS(SELECT 1 FROM account_opening_snapshots WHERE account_id=?1)",
         [&target.id],
         |r| r.get(0),
     )?;
@@ -624,6 +657,20 @@ pub fn delete(ctx: &Context<'_>, target: &VersionedId, confirm: bool) -> Result<
 }
 
 pub fn change_balance(
+    ctx: &Context<'_>,
+    id: &str,
+    amount: &Money,
+    date: &str,
+    reason: Option<&str>,
+    opening: bool,
+) -> Result<AccountDetail> {
+    if opening && opening_floor(ctx, id)?.is_some() {
+        return Err(conflict("opening_snapshot_requires_review"));
+    }
+    write_balance(ctx, id, amount, date, reason, opening)
+}
+
+pub(crate) fn write_balance(
     ctx: &Context<'_>,
     id: &str,
     amount: &Money,
@@ -646,7 +693,7 @@ pub fn change_balance(
     {
         return Err(invalid("signedMoney", "invalid_balance_change"));
     }
-    if reason.is_some_and(|text| text.chars().count() > 1000) {
+    if reason.is_some_and(|text| text.chars().count() > if opening { 1000 } else { 500 }) {
         return Err(invalid("reason", "notes_too_long"));
     }
     let old = if opening {
@@ -686,6 +733,9 @@ pub fn change_balance(
                 [&new],
             )?;
             super::transactions::project_posting(ctx, &new, true)?;
+            if !opening {
+                super::corrections::record_adjustment(ctx, id, &new, reason.unwrap_or_default())?;
+            }
         }
     }
     updated(ctx, id)

@@ -7,6 +7,7 @@ class SessionStore {
   active = $state<LedgerSession | null>(null);
   lifecycle = $state<LifecycleState>('unselected');
   epoch = $state(0);
+  financialDateTick = $state(0);
   timezone = $state<string|null>(null);
 
   set(value: LedgerSession | null, lifecycle: LifecycleState = value ? 'ready' : 'unselected') {
@@ -60,6 +61,29 @@ export function message(error: unknown) {
       account_has_history: 'This account already has activity. Keep its current type and currency.',
       account_has_history_archive_instead: 'Archive this account to hide it from the account list.',
       stale_ledger_revision: 'Your activity changed. Refresh and try again.',
+      financial_calendar_required: 'Set up a payday calendar first.',
+      financial_calendar_history_unavailable: 'This date precedes the available payday calendar.',
+      cycle_budget_category_unavailable: 'Each expense category can belong to only one budget per cycle.',
+      cycle_budget_name_already_used: 'A budget with this name already exists in the cycle.',
+      cash_plan_posting_ineligible: 'Choose an eligible posted IDR transaction from a liquid account.',
+      cash_plan_posting_already_linked: 'That transaction is already linked to a plan entry.',
+      posting_has_audited_dependencies: 'Review the linked financial records before changing this transaction.',
+      posting_correction_requires_ordinary_posted: 'Only ordinary posted transactions can use this correction.',
+      posting_requires_specialized_correction: 'This transaction needs its original workflow for corrections.',
+      refund_requires_unclassified_credit: 'Choose an uncategorized posted credit to record a refund.',
+      refund_original_ineligible: 'Choose an earlier eligible purchase in the same currency.',
+      refund_exceeds_purchase: 'The combined refunds exceed the original purchase.',
+      transfer_fee_requires_review: 'Review the transfer and its fee together before changing either.',
+      opening_snapshot_same_day_ordering_required: 'An existing posting shares this date. Choose a snapshot date with clear ordering.',
+      opening_snapshot_future_date: 'Choose today or an earlier date for the snapshot.',
+      staged_occurrence_amount_changed: 'This expected transaction uses a previous amount. Review the current recurring amount before posting.',
+      fee_category_required: 'Choose an expense category for the transfer fee.',
+      opening_snapshot_requires_review: 'Review the opening snapshot before changing it.',
+      cash_plan_stage_rule_ineligible: 'Choose a recurring IDR expense without category splits.',
+      cash_plan_stage_overlaps: 'Forecast stages must have non-overlapping dates.',
+      cash_plan_stage_invalid_range: 'End the stage on or after its start date.',
+      historical_card_checkpoint_required: 'A historical card checkpoint is required to correct this opening balance.',
+      invalid_payday_anchor: 'Choose a payday from 1 to 31.',
       optional_module_disabled: 'Turn on this feature in Settings to use it.',
     };
     const known = [source.messageKey, ...Object.values(source.fields ?? {})].find(key => friendly[key]);

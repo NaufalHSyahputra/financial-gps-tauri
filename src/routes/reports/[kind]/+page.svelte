@@ -62,6 +62,9 @@
   <Label class="field">Category<NativeSelect bind:value={categoryId}><option value="">All categories</option>{#each categories.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
 </Card>
 <Feedback error={report.error||task.error} loading={report.loading}/>
+{#if report.value?.balanceHistoryFloor}
+  <p class="mb-3 text-sm text-muted-foreground" role="status">Net worth is incomplete before {report.value.balanceHistoryFloor}. An opening snapshot starts the available balance history for one or more accounts.</p>
+{/if}
 {#if report.value}
   <p class="mb-3 text-sm text-muted-foreground">Totals include amounts in {session.active?.baseCurrency}.</p>
   {#if graph}<Card class="mb-5"><ReportChart {series} label={kind.label}/></Card>{/if}
@@ -79,4 +82,17 @@
       {/each}
     </TableBody></Table>
   </div>
+{/if}
+
+{#if report.value?.separatePostings.length}
+  <Card as="section" class="mt-4">
+    <h2 class="section-title">Adjustments and unlinked refunds</h2>
+    <ul class="mt-2 divide-y divide-line">
+      {#each report.value.separatePostings as item (item.id)}
+        <li class="flex flex-wrap items-center gap-3 py-2 text-sm">
+          <a class="mr-auto underline" href={'/transactions/' + item.id}>{item.label}</a><span>{privacy.date(item.date)}</span><span class="numeric">{privacy.money(item.amount)}</span>
+        </li>
+      {/each}
+    </ul>
+  </Card>
 {/if}

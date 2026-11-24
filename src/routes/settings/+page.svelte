@@ -14,6 +14,7 @@
   import Heading from '../../lib/components/Heading.svelte';
   import Feedback from '../../lib/components/Feedback.svelte';
   import Modal from '../../lib/components/Modal.svelte';
+  import FinancialCalendarSettings from '#lib/views/FinancialCalendarSettings.svelte';
   import StorageSync from '../../lib/views/StorageSync.svelte';
   import ThemeSelector from '../../lib/components/ThemeSelector.svelte';
   import CurrencySelect from '../../lib/components/CurrencySelect.svelte';
@@ -79,6 +80,7 @@
     <h2 id="appearance-heading" class="section-title mb-3">Appearance</h2>
     <ThemeSelector/>
   </Card>
+  <FinancialCalendarSettings />
   <StorageSync onLedgerChanged={async () => { await launcher.refresh(); settings.refresh(); }} />
   <Card as="section" >
     <h2 class="section-title">Activity settings</h2>

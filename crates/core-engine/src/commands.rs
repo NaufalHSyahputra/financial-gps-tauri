@@ -25,7 +25,7 @@ macro_rules! ledger_types {
             pub struct InstallmentPreviewQuery { pub series:Option<String>, pub draft:InstallmentDraft, pub scope:InstallmentScope }
             pub struct ApplyPreview { pub preview_token:String }
             pub struct TransferCandidatesQuery { pub anchor_id:String, pub criteria:CandidateCriteria, pub page:PageReq }
-            pub struct TransferSave { pub link_id:Option<String>, pub source:ExistingOrDraft, pub destination:ExistingOrDraft, pub rate:Option<TransferRate> }
+            pub struct TransferSave { pub link_id:Option<String>, pub source:ExistingOrDraft, pub destination:ExistingOrDraft, pub rate:Option<TransferRate>, pub fee:Option<TxDraft> }
             pub struct TransferId { pub link_id:String }
             pub struct TransferDelete { pub link_id:String, pub disposition:Disposition, pub confirm:bool }
             pub struct CatalogQuery { pub query:Option<String>, pub include_archived:Option<bool>, pub page:PageReq }
@@ -346,12 +346,13 @@ macro_rules! ledger_operations {
             TransferSave,
             TransferDetail,
             &["transfers", "transactions", "accounts", "reports", "search"],
-            |ctx, input, _state, _label| transfers::save(
+            |ctx, input, _state, _label| transfers::save_with_fee(
                 ctx,
                 input.link_id.as_deref(),
                 &input.source,
                 &input.destination,
-                input.rate.as_ref()
+                input.rate.as_ref(),
+                input.fee.as_ref()
             )
         );
         scoped_write!(
@@ -653,6 +654,74 @@ macro_rules! planning_types {
 #[macro_export]
 macro_rules! planning_operations {
     () => {
+        scoped_read!(
+            financial_calendar_get,
+            Option<calendar::FinancialCalendarView>,
+            |ctx| calendar::get(ctx)
+        );
+        scoped_write!(
+            financial_calendar_save,
+            calendar::CalendarInput,
+            Deleted,
+            &["financialCalendar", "cycleBudgets", "cashPlan"],
+            |ctx, args, _desktop, _window| calendar::save(ctx, &args)
+        );
+        scoped_read!(
+            budget_cycle_get,
+            cycle_budgets::CycleBudgetQuery,
+            Option<cycle_budgets::CycleBudgetView>,
+            |ctx, args, _desktop, _window| cycle_budgets::get(ctx, &args)
+        );
+        scoped_write!(
+            budget_cycle_edit,
+            cycle_budgets::CycleBudgetEdit,
+            Deleted,
+            &["cycleBudgets"],
+            |ctx, args, _desktop, _window| cycle_budgets::edit(ctx, &args)
+        );
+        scoped_read!(
+            cash_plan_get,
+            cash_plan::CashPlanQuery,
+            Option<cash_plan::CashPlanView>,
+            |ctx, args, _desktop, _window| cash_plan::get(ctx, &args)
+        );
+        scoped_write!(
+            cash_plan_edit,
+            cash_plan::CashPlanEdit,
+            Deleted,
+            &["cashPlan"],
+            |ctx, args, desktop, _window| {
+                if matches!(args, cash_plan::CashPlanEdit::SetStages(_)) {
+                    desktop.check_module("recurring_list")?;
+                }
+                cash_plan::edit(ctx, &args)
+            }
+        );
+        scoped_read!(
+            posting_correction_preview,
+            corrections::CorrectionRequest,
+            corrections::CorrectionPreview,
+            |ctx, args, _desktop, _window| corrections::preview(ctx, &args)
+        );
+        scoped_write!(
+            posting_correction_apply,
+            corrections::CorrectionConfirm,
+            Deleted,
+            &[
+                "transactions",
+                "accounts",
+                "reports",
+                "cashPlan",
+                "cycleBudgets"
+            ],
+            |ctx, args, _desktop, _window| corrections::apply(ctx, &args)
+        );
+        scoped_read!(
+            posting_audit_list,
+            Id,
+            Vec<corrections::PostingAuditItem>,
+            |ctx, args, _desktop, _window| corrections::history(ctx, &args.id)
+        );
         scoped_read!(
             import_templates_list,
             TemplateQuery,

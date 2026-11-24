@@ -5,7 +5,7 @@
   import { Input, RadioInput } from '#lib/components/ui/input/index.js';
   import { NativeSelect } from '#lib/components/ui/native-select/index.js';
   import { NativeCheckbox } from '#lib/components/ui/checkbox/index.js';
-  import type { AccountDraft_Deserialize, LedgerStorageMode, Money, PathGrant } from '../lib/drivers/runtime';
+  import type { AccountDraft_Deserialize, CalendarInput, LedgerStorageMode, Money, PathGrant } from '../lib/drivers/runtime';
   import { useLauncher } from '../lib/launcher.svelte';
   import { saveStorageMode, storageMessage, testConnection } from '../lib/drivers/storage-credentials';
   import { storageSync } from '../lib/stores/storage-sync.svelte';
@@ -25,7 +25,7 @@
   let setupScope = $state<string>();
   let setupRequest = $state<string>();
   const guided = $derived(launcher.loaded && !advanced && (!launcher.ledgers.length || setupStarted));
-  function initialSetup(draft: AccountDraft_Deserialize, startingBalance: Money) {
+  function initialSetup(draft: AccountDraft_Deserialize, startingBalance: Money, calendar?: CalendarInput) {
     setupStarted = true;
     void launcher.run(async () => {
       async function saveAccount() {
@@ -33,6 +33,7 @@
         setupScope = scope.sessionId;
         setupRequest ??= crypto.randomUUID();
         await session.call(commands.accountSave({ scope, requestId: setupRequest }, { draft, startingBalance }));
+        if (calendar) await session.call(commands.financialCalendarSave(session.mutation(), calendar));
       }
       if (setupScope && launcher.session?.scope.sessionId === setupScope) {
         await saveAccount();

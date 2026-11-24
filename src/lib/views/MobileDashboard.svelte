@@ -24,7 +24,13 @@
   })));
   const payees = query(()=>recent.value?.rows.some(row=>row.payeeId)
     ? session.call(commands.payeesList(session.scope,{page:pageRequest(null,200)})) : Promise.resolve(null));
-  const budgets = query(()=>privacy.visible('budgets')
+  const calendar = query(() => { session.financialDateTick; return session.call(commands.financialCalendarGet(session.scope)); });
+  const cycleBudgets = query(() => calendar.value && privacy.visible('budgets')
+    ? session.call(commands.budgetCycleGet(session.scope, {})) : Promise.resolve(null));
+  const cashPlan = query(() => calendar.value
+    ? session.call(commands.cashPlanGet(session.scope, { uncertainIds: [] })) : Promise.resolve(null));
+  const nextDue = $derived(cashPlan.value?.days.find(day => day.obligations.minor !== '0'));
+  const budgets = query(() => !calendar.loading && !calendar.value && privacy.visible('budgets')
     ? session.call(commands.budgetsGet(session.scope,{month:date.slice(0,7)})) : Promise.resolve(null));
   const goals = query(()=>privacy.visible('goals')
     ? session.call(commands.goalsList(session.scope,{asOf:date,page:pageRequest(null,3)})) : Promise.resolve(null));
@@ -143,11 +149,33 @@
     </div>
   </section>
 
+  {#if calendar.value}
+    <Card as="section" class="flex flex-wrap items-center gap-3 md:col-span-2">
+      <div class="mr-auto">
+        <h2 class="section-title">Day {calendar.value.current.elapsed} of {calendar.value.current.days}</h2>
+        <p class="text-sm text-muted-foreground">Payday cycle · {privacy.date(calendar.value.current.start)} to {privacy.date(calendar.value.current.end)}</p>
+        {#if nextDue}
+          <p class="mt-2 text-sm">Next due {privacy.date(nextDue.date)} · <span class="numeric">{privacy.money(nextDue.obligations)}</span>{#if !privacy.masked && nextDue.dependsOnExpectedIncome} · Depends on expected income{/if}</p>
+        {/if}
+      </div>
+      <Button variant="outline" href="/planning">View cash plan</Button>
+    </Card>
+  {/if}
   {#if privacy.visible('budgets') || privacy.visible('goals')}
     <section aria-labelledby="wallet-plan" class="grid min-w-0 gap-2 md:col-span-2 md:grid-cols-2">
       <h2 id="wallet-plan" class="section-title md:col-span-2">Your plan</h2>
-      <Feedback error={budgets.error || goals.error}/>
+      <Feedback error={budgets.error || cycleBudgets.error || goals.error}/>
       {#if privacy.visible('budgets')}
+        {#if calendar.value}
+          {#each cycleBudgets.value?.rows.slice(0,3) ?? [] as budget (budget.id)}
+            <Card href="/budgets" class="block no-underline">
+              <span class="mb-2 block text-sm font-medium">{budget.name}</span>
+              <span class="numeric text-sm">{privacy.money(budget.remaining)} <span class="font-sans text-muted-foreground">remaining this cycle</span></span>
+            </Card>
+          {:else}
+            {#if !cycleBudgets.loading}<Button variant="outline" href="/budgets">View cycle budgets</Button>{/if}
+          {/each}
+        {:else}
         {#each budgets.value?.rows.slice(0,3)??[] as budget (budget.categoryId)}
           {@const limit=BigInt(budget.limit.minor)}
           {@const progress=limit>0n ? BigInt(budget.actual.minor)*100n/limit : 0n}
@@ -159,6 +187,7 @@
         {:else}
           {#if !budgets.loading}<Button variant="outline"  href="/budgets">View budgets</Button>{/if}
         {/each}
+        {/if}
       {/if}
       {#if privacy.visible('goals')}
         {#each goals.value?.rows??[] as goal (goal.id)}

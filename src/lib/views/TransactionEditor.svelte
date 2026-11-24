@@ -11,7 +11,7 @@
   import { NativeCheckbox } from '#lib/components/ui/checkbox/index.js';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { commands, type Direction, type TxDraft_Deserialize, type TxStatus, type TxDetail_Serialize, type InstallmentPreview, type InstallmentScope, type TransferCandidate } from '../drivers/runtime';
+  import { commands, type Direction, type TxDraft_Deserialize, type TxStatus, type TxDetail_Serialize, type InstallmentPreview, type InstallmentScope, type TransferCandidate, type CorrectionRequest_Deserialize, type CorrectionPreview_Serialize } from '../drivers/runtime';
   import { session, today, pageRequest } from '../stores/session.svelte';
   import { query, createTask } from '../stores/task.svelte';
   import { privacy } from '../stores/privacy.svelte';
@@ -28,6 +28,17 @@
   const payees=query(()=>session.call(commands.payeesList(session.scope,{page:pageRequest(null,200)})));
   const data=query(()=>session.call(commands.transactionGet(session.scope,{id})));
   const files=query(()=>session.call(commands.attachmentsList(session.scope,{transactionId:id})));
+  const audit=query(()=>session.call(commands.postingAuditList(session.scope,{id})));
+  let correctionMode=$state<'void'|'correct'|'refund'>();
+  let reason=$state('');
+  let originalId=$state('');
+  let preview=$state<CorrectionPreview_Serialize>();
+  let request=$state<CorrectionRequest_Deserialize>();
+  const purchases=query(()=>correctionMode==='refund' && snapshot ? session.call(commands.transactionsList(session.scope,{
+    filter:{status:'posted',direction:'debit',ignored:false,transfer:false,pnlOnly:true,range:{to:snapshot.row.bankDate},nativeAmount:{currency:snapshot.row.amount.currency}},
+    page:pageRequest(null,100)
+  })) : Promise.resolve(null));
+  const voided=$derived(audit.value?.some(entry=>entry.action==='void')??false);
   const task=createTask();
   const snapshot=$derived(data.value);
   let loaded=$state('');
@@ -96,10 +107,41 @@
       effectiveBillDate:billDate||null,reportingDateOverride:reportDate||null,ignored,excludeFromPnl:pnl,flagged,flagDueDate:flagged&&due?due:null,
       splits:splits.map(row=>({categoryId:row.categoryId,minor:privacy.amount(currency,row.value).minor})) };
   }
+  function openCorrection(mode: 'void'|'correct'|'refund') {
+    correctionMode=mode;reason='';originalId='';preview=undefined;request=undefined;
+  }
+  function reviewCorrection(event: SubmitEvent) {
+    event.preventDefault();
+    if(!snapshot || !correctionMode)return;
+    const target={id,version:snapshot.row.version};
+    void task.run(async()=>{
+      const action = correctionMode === 'void' ? {void:{target}}
+        : correctionMode === 'correct' ? {correct:{target,draft:posting()}}
+        : {refund:{target,originalId:originalId||null}};
+      const candidate={action,reason};
+      preview=await session.call(commands.postingCorrectionPreview(session.scope,candidate));
+      request=candidate;
+    });
+  }
+  function confirmCorrection() {
+    if(!preview || !request)return;
+    const reviewed=preview;
+    const input=request;
+    void task.run(async()=>{
+      await session.call(commands.postingCorrectionApply({...session.mutation(),expectedRevision:reviewed.revision},{request:input,token:reviewed.token}));
+      correctionMode=undefined;data.refresh();audit.refresh();
+    });
+  }
   function save(event:SubmitEvent) {
     event.preventDefault();
     void task.run(async()=>{
-      await session.call(commands.transactionSave(session.mutation(),{target:snapshot?{id,version:snapshot.row.version}:null,draft:posting()}));
+      const draft=posting();
+      if(snapshot?.row.status==='posted' && !protectedSource && !snapshot.draft.installment
+        && (draft.bankDate!==snapshot.draft.bankDate || draft.direction!==snapshot.draft.direction || draft.amount.minor!==snapshot.draft.amount.minor)) {
+        openCorrection('correct');
+        return;
+      }
+      await session.call(commands.transactionSave(session.mutation(),{target:snapshot?{id,version:snapshot.row.version}:null,draft}));
       data.refresh();
     });
   }
@@ -181,12 +223,12 @@
   {:else}
     {#if snapshot}
       <Card class="mb-4 flex flex-wrap items-center gap-4">
-        <span class="numeric text-xl">{privacy.money(snapshot.row.amount)}</span><Badge variant="secondary" class="capitalize">{snapshot.row.status}</Badge>
+        <span class="numeric text-xl">{privacy.money(snapshot.row.amount)}</span><Badge variant="secondary" class="capitalize">{voided ? 'Voided' : snapshot.row.status}</Badge>
         <span class="text-sm text-muted-foreground">Reporting date {privacy.date(snapshot.row.reportingDate)}</span>
         {#if snapshot.sources.length}<Badge variant="secondary" >Imported</Badge>{/if}
         {#if snapshot.draft.aliasId}<Button variant="outline"  href={'/transactions?account='+snapshot.row.accountId+'&alias='+snapshot.draft.aliasId}>Linked card activity</Button>{/if}
         {#if snapshot.row.transferId}<Button variant="outline" onclick={unlink}>Unlink transfer</Button>
-        {:else}<Button variant="outline" onclick={()=>{transfer=!transfer;if(transfer)transferChoices();}}>Find transfer match</Button>{/if}
+        {:else if !voided}<Button variant="outline" onclick={()=>{transfer=!transfer;if(transfer)transferChoices();}}>Find transfer match</Button>{/if}
       </Card>
     {/if}
     {#if link.value}
@@ -195,6 +237,20 @@
       <Card as="section" class="mb-4">
         <h2 class="section-title">Linked transfer</h2>
         <p class="mt-2"><a class="underline" href={'/transactions/'+other.id}>Other side of the transfer</a> · <span class="numeric">{privacy.money(other.amount)}</span></p>
+      </Card>
+    {/if}
+    {#if audit.value?.length}
+      <Card as="section" class="mb-4">
+        <h2 class="section-title">Posting history</h2>
+        <ul class="mt-2 divide-y divide-line">
+          {#each audit.value as entry (entry.id)}
+            <li class="space-y-1 py-2 text-sm">
+              <p class="font-medium capitalize">{entry.action} · {new Date(Number(entry.recordedAtMs)).toLocaleString()}</p>
+              <p>{entry.reason}</p>
+              {#if entry.before && entry.after}<p class="text-muted-foreground">{privacy.money(entry.before.row.amount)} · {entry.before.row.bankDate} → {entry.action === 'void' ? 'Voided' : privacy.money(entry.after.row.amount) + ' · ' + entry.after.row.bankDate}</p>{/if}
+            </li>
+          {/each}
+        </ul>
       </Card>
     {/if}
     {#if transfer}
@@ -213,6 +269,7 @@
         <Button variant="default" type="submit"  disabled={task.busy}>Save transfer</Button>
       </Card>
     {/if}
+      {#if !voided}
       <Card as="form" id="transaction-editor" class="space-y-4" onsubmit={save}>
         <div class="form-grid">
           <Label class="field">Account<NativeSelect bind:value={accountId} required disabled={protectedSource}><option value="">Choose account</option>{#each accounts.value as item (item.id)}<option value={item.id}>{item.account.name} · {item.account.currencyCode}</option>{/each}</NativeSelect></Label>
@@ -249,10 +306,17 @@
         {/if}
         <div class="flex flex-wrap gap-2">
           <Button variant="default" type="submit"  disabled={task.busy}>Save transaction</Button>
+          {#if snapshot.row.status==='posted' && snapshot.row.entryKind==='ordinary' && !snapshot.row.transferId && !snapshot.row.ignored && !snapshot.draft.installment}
+            <Button variant="outline" type="button" onclick={()=>openCorrection('void')}>Void transaction</Button>
+            {#if snapshot.row.direction==='credit' && !snapshot.row.categoryId && !snapshot.draft.splits.length}
+              <Button variant="outline" type="button" onclick={()=>openCorrection('refund')}>{audit.value?.some(entry=>entry.action==='refund') ? 'Link refund to purchase' : 'Record as refund'}</Button>
+            {/if}
+          {/if}
           {#if snapshot && !snapshot.row.transferId && snapshot.row.entryKind!=='opening'}<Button variant="outline" type="button" onclick={()=>deleting=true}>Delete</Button>{/if}
           {#if snapshot?.row.status==='projected' && !protectedSource}<Button variant="outline" type="button" onclick={post}>Mark as confirmed</Button>{/if}
         </div>
       </Card>
+      {/if}
     {#if snapshot}
       <Card as="section" class="mt-4">
         <div class="mb-3 flex items-center justify-between gap-3"><h2 class="section-title">Attachments</h2><Button variant="outline" onclick={addAttachment} disabled={task.busy}>Add files…</Button></div>
@@ -283,3 +347,40 @@
 {#if attachmentDelete}<Modal confirm title="Remove attachment?" close={()=>attachmentDelete=''}>
   <Button variant="default"  onclick={()=>task.run(async()=>{await session.call(commands.attachmentDelete(session.mutation(),{id:attachmentDelete,confirm:true}));attachmentDelete='';files.refresh();})}>Confirm removal</Button><Feedback error={task.error}/>
 </Modal>{/if}
+
+{#if correctionMode}
+  <Modal title={correctionMode === 'void' ? 'Void transaction' : correctionMode === 'refund' ? 'Record refund' : 'Review transaction correction'} close={() => correctionMode=undefined} confirm={correctionMode === 'void'}>
+    {#if preview}
+      <div class="space-y-3">
+        {#if preview.before}<p>Current posting · {preview.before.row.bankDate} · <span class="numeric">{privacy.money(preview.before.row.amount)}</span></p>{/if}
+        {#if correctionMode === 'void'}
+          <p>The posting will be retained in history and removed from balances and spending.</p>
+        {:else if preview.proposed}
+          <p>After confirmation · {preview.proposed.bankDate} · <span class="numeric">{privacy.money(preview.proposed.amount)}</span></p>
+          {#if correctionMode === 'refund'}<p>{originalId ? 'This refund will reduce spending attributed to the original purchase.' : 'This refund will appear separately from ordinary income.'}</p>{/if}
+        {/if}
+        <Feedback error={task.error}/>
+        <div class="flex flex-wrap gap-2">
+          <Button variant="outline" onclick={()=>{preview=undefined;request=undefined;}}>Back</Button>
+          <Button disabled={task.busy} onclick={confirmCorrection}>Confirm {correctionMode === 'correct' ? 'correction' : correctionMode}</Button>
+        </div>
+      </div>
+    {:else}
+      <form class="space-y-3" onsubmit={reviewCorrection}>
+        {#if correctionMode === 'refund'}
+          <Label class="field">Original purchase
+            <NativeSelect bind:value={originalId}>
+              <option value="">Leave this refund unlinked</option>
+              {#each purchases.value?.rows.filter(row=>row.entryKind==='ordinary')??[] as row (row.id)}
+                <option value={row.id}>{row.bankDate} · {row.description} · {privacy.money(row.amount)}</option>
+              {/each}
+            </NativeSelect>
+          </Label>
+        {/if}
+        <Label class="field">Reason<Textarea bind:value={reason} maxlength={500} required/></Label>
+        <Feedback error={task.error || purchases.error}/>
+        <Button type="submit" disabled={task.busy}>Review changes</Button>
+      </form>
+    {/if}
+  </Modal>
+{/if}

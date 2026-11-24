@@ -107,7 +107,7 @@ try {
   assert.equal(counts.requests, 0);
   console.log('PASS retired import and exchange-rate commands return a typed error without network activity');
 
-  for (const version of [1, 2]) {
+  for (const version of [1, 2, 3]) {
     const legacyPath = join(temporary, `legacy-${version}.db`);
     const schema = readFileSync(new URL('../crates/core-engine/migrations/0001_init.sql', import.meta.url), 'utf8');
     const legacyDb = new DatabaseSync(legacyPath);
@@ -123,12 +123,18 @@ try {
       INSERT INTO accounts(id,name,kind,currency_code) VALUES('original','Old bank','checking','USD');
       INSERT INTO categories(id,name,kind) VALUES('food','Groceries','expense');
       PRAGMA user_version=1;`);
-    if (version === 2) {
+    if (version >= 2) {
       const cash = readFileSync(new URL('../crates/core-engine/migrations/0002_cash_accounts.sql', import.meta.url), 'utf8');
       legacyDb.exec('PRAGMA foreign_keys=OFF; PRAGMA legacy_alter_table=ON; BEGIN IMMEDIATE;');
       legacyDb.exec(cash);
       legacyDb.prepare('INSERT INTO schema_migrations VALUES(2,?,0)').run(createHash('sha256').update(cash).digest('hex'));
       legacyDb.exec('PRAGMA user_version=2; COMMIT; PRAGMA legacy_alter_table=OFF; PRAGMA foreign_keys=ON;');
+    }
+    if (version === 3) {
+      const icons = readFileSync(new URL('../crates/core-engine/migrations/0003_category_icons.sql', import.meta.url), 'utf8');
+      legacyDb.exec(icons);
+      legacyDb.prepare('INSERT INTO schema_migrations VALUES(3,?,0)').run(createHash('sha256').update(icons).digest('hex'));
+      legacyDb.exec('PRAGMA user_version=3;');
     }
     legacyDb.close();
     const legacy = await host();
@@ -157,7 +163,7 @@ try {
     assert.equal(savedLegacy.category.draft.icon ?? null, null);
     assert.equal(savedLegacy.updated.draft.icon, 'shopping-cart');
   }
-  console.log('PASS browser upgrades V1 and V2 databases, keeps existing accounts and categories, and saves category icons');
+  console.log('PASS browser upgrades V1 through V3 databases, keeps existing accounts and categories, and saves category icons');
 
   const url = 'libsql://phase-three-test.turso.io';
   const switching = await a.evaluate(async ({ url, auth }) => {
@@ -187,6 +193,12 @@ try {
     } finally { db.close(); }
   }, { id: stored.scope.ledgerInstanceId, auth });
   assert.equal(encrypted, true);
+  await a.evaluate(async () => {
+    const mutation = () => ({ scope: window.scope, requestId: crypto.randomUUID() });
+    await window.ok('financialCalendarSave', mutation(), { timezone: 'Asia/Jakarta', anchor: 10, weekdayPolicy: 'none' });
+    const calendar = await window.ok('financialCalendarGet', window.scope);
+    await window.ok('cashPlanEdit', mutation(), { save: { name: 'Turso planning fixture', dueOn: calendar.today, minor: '1500', kind: 'obligation' } });
+  });
   assert.equal((await a.evaluate(() => window.ok('ledgerSyncNow', window.scope))).remoteGeneration, '1');
   console.log('PASS AES-GCM IndexedDB credential round trip across restart and live SELECT 1 protocol');
 
@@ -201,6 +213,13 @@ try {
   }, { url, auth });
   const synced = await b.evaluate(() => window.ok('categoriesList', window.scope, { page: { limit: 10 } }));
   assert.equal(synced.rows[0].draft.icon, 'coffee');
+  const planning = await b.evaluate(async () => ({
+    calendar: await window.ok('financialCalendarGet', window.scope),
+    forecast: await window.ok('cashPlanGet', window.scope, { uncertainIds: [] }),
+  }));
+  assert.equal(planning.calendar.settings.anchor, 10);
+  assert.equal(planning.forecast.entries.find(row => row.name === 'Turso planning fixture').amount.minor, '1500');
+  console.log('PASS payday calendar and forecast assumptions survive encrypted replica sync');
   counts.networkDisabled = true;
   const prior = counts.requests;
   const makeWrite = (page, name) => page.evaluate(async name => {
@@ -255,12 +274,16 @@ try {
       target: { kind: 'new', name: 'Restored' }
     }), null);
     const records = await window.ok('transactionsList', restored.scope, { filter: {}, page: { limit: 10 } });
-    return { backup, restored, records };
+    const calendar = await window.ok('financialCalendarGet', restored.scope);
+    const forecast = await window.ok('cashPlanGet', restored.scope, { uncertainIds: [] });
+    return { backup, restored, records, calendar, forecast };
   });
   assert.equal(archiveResult.records.rows[0].amount.minor, '1234');
   assert.equal(archiveResult.records.rows[0].category.icon, 'coffee');
   assert.notEqual(archiveResult.restored.scope.ledgerInstanceId, stored.scope.ledgerInstanceId);
-  console.log('PASS encrypted portable browser backup and restore with category icons');
+  assert.equal(archiveResult.calendar.settings.anchor, 10);
+  assert.ok(archiveResult.forecast.entries.some(row => row.name === 'Turso planning fixture'));
+  console.log('PASS encrypted portable browser backup and restore with category icons and financial planning data');
 } finally {
   await browser?.close();
   server.kill();

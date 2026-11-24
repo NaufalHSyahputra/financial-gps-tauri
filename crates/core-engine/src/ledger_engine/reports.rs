@@ -23,7 +23,9 @@ dto! {
         pub categories: Vec<CategoryPoint>,
     }
     pub struct CategoryPoint { pub category_id: Option<String>, pub direction: Direction, pub amount: Totals }
-    pub struct ReportView { pub kind: ReportKind, pub currency: String, pub points: Vec<ReportPoint>, pub revision: String }
+    pub struct ReportView { pub kind: ReportKind, pub currency: String, pub points: Vec<ReportPoint>, pub revision: String,
+        pub balance_history_floor: Option<String>, pub separate_postings: Vec<SeparatePosting> }
+    pub struct SeparatePosting { pub id: String, pub date: String, pub label: String, pub amount: Money }
     pub enum DashboardWidget { Accounts, Credit, NetWorth, IncomeVsExpense, CashFlow }
     pub struct DashboardView {
         pub as_of: String, pub accounts: Vec<AccountDetail>, pub credit: Vec<Credit>, pub net_worth: Option<ReportView>,
@@ -249,12 +251,91 @@ fn report_at(
             }
         })
         .collect();
+    let balance_history_floor = if matches!(kind, ReportKind::NetWorth) {
+        let mut query =
+            Query::new("SELECT max(o.effective_on) FROM account_opening_snapshots o".into());
+        query.sql.push_str(" WHERE 1");
+        query.choices("o.account_id IN ({values})", &filter.account_ids);
+        let start = query.bind(period.from.to_string());
+        query.and(&format!("o.effective_on>{start}"));
+        ctx.tx
+            .prepare(&query.sql)?
+            .query_row(params_from_iter(query.args), |r| r.get(0))?
+    } else {
+        None
+    };
+    let separate_postings = if matches!(kind, ReportKind::IncomeVsExpense | ReportKind::CashFlow) {
+        separate_postings(ctx, filter, &period, cutoff)?
+    } else {
+        Vec::new()
+    };
     Ok(ReportView {
+        balance_history_floor,
+        separate_postings,
         kind: kind.clone(),
         currency: target.to_owned(),
         points,
         revision: revision(&ctx.tx)?,
     })
+}
+
+// These postings reconcile cash and balances but are excluded from ordinary income and expense.
+fn separate_postings(
+    ctx: &Context<'_>,
+    filter: &LedgerFilter,
+    period: &Period,
+    cutoff: NaiveDate,
+) -> Result<Vec<SeparatePosting>> {
+    let any: bool = ctx.tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM transactions WHERE entry_kind='adjustment')
+           OR EXISTS(SELECT 1 FROM posting_refunds WHERE original_id IS NULL)",
+        [],
+        |row| row.get(0),
+    )?;
+    if !any {
+        return Ok(Vec::new());
+    }
+    let mut query = Query::new(format!(
+        "SELECT t.id,t.bank_date,t.entry_kind,t.direction,t.currency_code,t.amount_minor{}",
+        tx::SOURCE
+    ));
+    let mut scoped = filter.clone();
+    scoped.range = None;
+    tx::filter_query(ctx, &mut query, &scoped)?;
+    query.and(
+        "t.ignored=0 AND t.status='posted' AND (t.entry_kind='adjustment' OR EXISTS(
+        SELECT 1 FROM posting_refunds p WHERE p.refund_id=t.id AND p.original_id IS NULL
+    ))",
+    );
+    let end = query.bind(cutoff.to_string());
+    query.and(&format!("t.bank_date<={end}"));
+    add_range(&mut query, "t.bank_date", period);
+    query
+        .sql
+        .push_str(" ORDER BY t.bank_date DESC,t.id DESC LIMIT 100");
+    let mut stmt = ctx.tx.prepare(&query.sql)?;
+    let mut rows = stmt.query(params_from_iter(query.args))?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let amount = row.get::<_, i64>(5)?;
+        let label = if row.get_ref(2)?.as_str()? == "adjustment" {
+            "Balance adjustment"
+        } else {
+            "Unlinked refund"
+        };
+        let signed = if row.get_ref(3)?.as_str()? == "debit" {
+            -amount
+        } else {
+            amount
+        };
+        result.push(SeparatePosting {
+            id: row.get(0)?,
+            date: row.get(1)?,
+            label: label.into(),
+            amount: money(row.get_ref(4)?.as_str()?, signed),
+        });
+    }
+    Ok(result)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -271,8 +352,14 @@ fn pnl(
     let source=tx::SOURCE.replace(" WHERE 1=1"," LEFT JOIN transaction_splits s ON s.transaction_id=t.id LEFT JOIN categories sc ON sc.id=s.category_id WHERE 1=1");
     let mut query = Query::new(format!(
         "SELECT t.reporting_date,t.currency_code,t.direction,coalesce(s.category_id,t.category_id),
-        coalesce(s.amount_minor,t.amount_minor),t.amount_minor{source}"
+        coalesce(s.amount_minor,t.amount_minor),t.amount_minor,
+        CASE WHEN t.direction='debit' THEN coalesce((SELECT sum(r.amount_minor) FROM posting_refunds p
+            JOIN transactions r ON r.id=p.refund_id WHERE p.original_id=t.id AND r.ignored=0
+            AND r.status='posted' AND r.bank_date<=?1),0) ELSE 0 END,
+        CASE WHEN s.position IS NULL THEN 0 ELSE coalesce((SELECT sum(prior.amount_minor) FROM transaction_splits prior
+            WHERE prior.transaction_id=t.id AND prior.position<s.position),0) END{source}"
     ));
+    query.args.push(cutoff.to_string().into());
     let mut filter = filter.clone();
     filter.range = None;
     tx::filter_query(ctx, &mut query, &filter)?;
@@ -298,7 +385,11 @@ fn pnl(
         let code = row.get_ref(1)?.as_str()?;
         let debit = row.get_ref(2)?.as_str()? == "debit";
         let category = row.get::<_, Option<String>>(3)?;
-        let amount = i128::from(row.get::<_, i64>(4)?);
+        let gross = i128::from(row.get::<_, i64>(4)?);
+        let whole = i128::from(row.get::<_, i64>(5)?);
+        let refund = i128::from(row.get::<_, i64>(6)?).min(whole);
+        let preceding = i128::from(row.get::<_, i64>(7)?);
+        let amount = gross - ((preceding + gross) * refund / whole - preceding * refund / whole);
         if let Some((code_target, (min, max))) = display {
             let result =
                 resolver.convert(&money(code, row.get::<_, i64>(5)?), code_target, date)?;
@@ -341,6 +432,13 @@ fn net_worth(
         tx::SOURCE
     ));
     query.and(accounts::BALANCE_VISIBLE);
+    if ctx.tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM account_opening_snapshots)",
+        [],
+        |r| r.get::<_, bool>(0),
+    )? {
+        query.and(accounts::SNAPSHOT_VISIBLE);
+    }
     if filter.account_ids.len() > 100 {
         return Err(invalid("accountIds", "too_many_filter_values"));
     }
@@ -606,7 +704,21 @@ pub fn dashboard(
                 date,
             )?;
         }
+        let as_of = date.to_string();
+        let mut balance_history_floor = None;
+        for account in &accounts {
+            if let Some(floor) = accounts::opening_floor(ctx, &account.id)?
+                && floor > as_of
+                && balance_history_floor
+                    .as_ref()
+                    .is_none_or(|prior| prior < &floor)
+            {
+                balance_history_floor = Some(floor);
+            }
+        }
         Some(ReportView {
+            balance_history_floor,
+            separate_postings: Vec::new(),
             kind: ReportKind::NetWorth,
             currency: target.clone(),
             revision: revision(&ctx.tx)?,

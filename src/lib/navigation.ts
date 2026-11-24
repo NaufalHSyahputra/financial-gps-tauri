@@ -9,7 +9,7 @@ export const reports: {kind:ReportKind;label:string;path:string}[] = [
 export const navigation = [
   {label:'Overview',items:[['Dashboard','/dashboard'],['Transactions','/transactions'],['Accounts','/accounts'],['Calendar','/calendar'],['Reports','/reports/net-worth']]},
   {label:'Organize',items:[['Rules','/rules'],['Categories','/categories'],['People & stores','/payees']]},
-  {label:'Plan',items:[['Budgets','/budgets'],['Recurring','/recurring'],['Goals','/goals'],['Assets','/assets'],['Shared groups','/groups']]},
+  {label:'Plan',items:[['Cash plan','/planning'],['Budgets','/budgets'],['Recurring','/recurring'],['Goals','/goals'],['Assets','/assets'],['Shared groups','/groups']]},
   {label:'Preferences',items:[['Settings','/settings'],['Backups','/settings/backups']]}
 ];
 export function hitPath(kind: SearchKind, id:string) {

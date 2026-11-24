@@ -442,6 +442,10 @@ pub fn occurrence_apply(
             .map(|(_, value)| value.to_string())
             .ok_or_else(|| invalid("nominalDate", "invalid_recurring_occurrence"))?
     };
+    let mut draft = proposed(&rule, &scheduled);
+    if let Some(amount) = super::cash_plan::staged_amount(ctx, &rule, &scheduled)? {
+        draft.amount.minor = amount;
+    }
     let existing_post = previous
         .as_ref()
         .and_then(|row| row.transaction_id.as_deref());
@@ -450,7 +454,7 @@ pub fn occurrence_apply(
             if let Some(previous) = previous {
                 return Ok(previous);
             }
-            let posting = tx::save(ctx, None, &proposed(&rule, &scheduled))?;
+            let posting = tx::save(ctx, None, &draft)?;
             (OccurrenceState::Generated, Some(posting.row.id))
         }
         OccurrenceAction::Skip => {
@@ -473,10 +477,18 @@ pub fn occurrence_apply(
         OccurrenceAction::Match => {
             let id = transaction_id.ok_or_else(|| invalid("transactionId", "required_field"))?;
             let posting = tx::get(ctx, id)?;
+            let linked: bool = ctx.tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM cash_plan_entries WHERE transaction_id=?1)",
+                [id],
+                |r| r.get(0),
+            )?;
+            if linked {
+                return Err(conflict("cash_plan_posting_already_linked"));
+            }
             if posting.row.account_id != rule.draft.account_id
                 || posting.row.status.as_str() != "posted"
                 || posting.row.direction.as_str() != rule.draft.direction.as_str()
-                || posting.row.amount.minor != rule.draft.amount.minor
+                || posting.row.amount.minor != draft.amount.minor
                 || posting.row.amount.currency != rule.draft.amount.currency
                 || posting.row.entry_kind != tx::EntryKind::Ordinary
             {
@@ -518,9 +530,14 @@ pub fn occurrence_apply(
                 if previous.is_some() {
                     return Err(conflict("occurrence_skipped"));
                 }
-                tx::save(ctx, None, &proposed(&rule, &scheduled))?
+                tx::save(ctx, None, &draft)?
             };
             if matches!(current.row.status, TxStatus::Projected) {
+                if current.row.amount.minor != draft.amount.minor
+                    && super::cash_plan::staged_amount(ctx, &rule, &scheduled)?.is_some()
+                {
+                    return Err(conflict("staged_occurrence_amount_changed"));
+                }
                 tx::post(
                     ctx,
                     &VersionedId {

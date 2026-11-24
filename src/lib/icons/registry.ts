@@ -99,6 +99,7 @@ export const routeIcons = {
   rules: 'rules',
   categories: 'category',
   payees: 'people',
+  planning: 'plan',
   budgets: 'plan',
   recurring: 'recurring',
   goals: 'goal',

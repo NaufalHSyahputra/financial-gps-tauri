@@ -1,6 +1,9 @@
 pub mod allocations;
 pub mod assets;
 pub mod budgets;
+pub mod calendar;
+pub mod cash_plan;
+pub mod cycle_budgets;
 pub mod goals;
 pub mod loans;
 pub mod recurring;

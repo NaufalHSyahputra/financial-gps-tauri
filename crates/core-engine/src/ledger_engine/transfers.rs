@@ -209,7 +209,36 @@ pub fn save(
     )?;
     get(ctx, &id)
 }
+pub fn save_with_fee(
+    ctx: &Context<'_>,
+    link_id: Option<&str>,
+    source: &ExistingOrDraft,
+    destination: &ExistingOrDraft,
+    rate: Option<&TransferRate>,
+    fee: Option<&TxDraft>,
+) -> Result<TransferDetail> {
+    if fee.is_some() && link_id.is_some() {
+        return Err(invalid("fee", "transfer_fee_requires_new_transfer"));
+    }
+    let saved = save(ctx, link_id, source, destination, rate)?;
+    if let Some(fee) = fee {
+        let id = super::corrections::save_transfer_fee(ctx, &saved.pair.source, fee)?;
+        ctx.tx.execute(
+            "INSERT INTO transfer_fees VALUES(?1,?2)",
+            params![saved.id, id],
+        )?;
+    }
+    Ok(saved)
+}
 pub fn unlink(ctx: &Context<'_>, id: &str) -> Result<TxPair> {
+    let has_fee: bool = ctx.tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM transfer_fees WHERE transfer_id=?1)",
+        [id],
+        |r| r.get(0),
+    )?;
+    if has_fee {
+        return Err(conflict("transfer_fee_requires_review"));
+    }
     let detail = get(ctx, id)?;
     let debit = detail.pair.source.row.id;
     let credit = detail.pair.destination.row.id;
