@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Label } from '#lib/components/ui/label/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
   import { NativeSelect } from '#lib/components/ui/native-select/index.js';
@@ -20,10 +21,13 @@
   }
 </script>
 <Modal title={group?'Edit group':'New shared group'} {close}>
-  <form class="space-y-3" onsubmit={submit}>
+  <form id={modalForm + '-group'} class="space-y-3" onsubmit={submit}>
     <Label class="field">Name<Input bind:value={name} required/></Label>
     <Label class="field">Type<NativeSelect bind:value={kind}><option value="social">Social</option><option value="trip">Trip</option><option value="costCenter">Cost center</option><option value="project">Project</option><option value="client">Client</option><option value="other">Other</option></NativeSelect></Label>
     <Label class="field">Your name in this group<Input bind:value={label} required/></Label>
-    <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save group</Button>
+    <Feedback error={task.error}/>
   </form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-group'}  disabled={task.busy}>Save group</Button>
+  {/snippet}
 </Modal>

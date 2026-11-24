@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { goto } from '$app/navigation';
   import RowActions from '#lib/components/RowActions.svelte';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -91,29 +92,37 @@
     {:else}<p class="text-sm text-muted-foreground">No shared lines configured.</p>{/each}
   </div>
 </Card>
-{#if line}<Modal title={editedLine?"Edit shared credit limit":"New shared credit limit"} close={()=>line=false}><form class="space-y-3" onsubmit={save}>
+{#if line}<Modal title={editedLine?"Edit shared credit limit":"New shared credit limit"} close={()=>line=false}><form id={modalForm + '-credit-limit'} class="space-y-3" onsubmit={save}>
   <Label class="field">Name<Input required bind:value={name}/></Label><CurrencySelect bind:value={currency}/><MoneyField label="Credit limit" bind:value={limit}/>
-  <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save shared credit limit</Button>
-</form></Modal>{/if}
+  <Feedback error={task.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-credit-limit'}  disabled={task.busy}>Save shared credit limit</Button>
+  {/snippet}
+</Modal>{/if}
 
 {#if removingAccount}
   <Modal confirm title="Delete account?" close={()=>removingAccount=undefined}>
     <p>Delete {removingAccount.account.name}? Accounts with activity can be archived.</p>
     <Feedback error={task.error}/>
-    <Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{
-      if (!removingAccount) return;
-      const {id,version}=removingAccount;
-      await session.call(commands.accountDelete(session.mutation(),{target:{id,version},confirm:true}));
-      removingAccount=undefined; accounts.refresh();
-    })}>Delete account</Button>
+    {#snippet footer()}
+      <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{
+        if (!removingAccount) return;
+        const {id,version}=removingAccount;
+        await session.call(commands.accountDelete(session.mutation(),{target:{id,version},confirm:true}));
+        removingAccount=undefined; accounts.refresh();
+      })}>Delete account</Button>
+    {/snippet}
   </Modal>
 {:else if removingLine}
   <Modal confirm title="Delete shared credit limit?" close={()=>removingLine=undefined}>
     <p>Delete {removingLine.draft.name}?</p><Feedback error={task.error}/>
-    <Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{
-      if (!removingLine) return;
-      await session.call(commands.cardLineDelete(session.mutation(),{id:removingLine.id}));
-      removingLine=undefined; lines.refresh();
-    })}>Delete shared limit</Button>
+    {#snippet footer()}
+      <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{
+        if (!removingLine) return;
+        await session.call(commands.cardLineDelete(session.mutation(),{id:removingLine.id}));
+        removingLine=undefined; lines.refresh();
+      })}>Delete shared limit</Button>
+    {/snippet}
   </Modal>
 {/if}

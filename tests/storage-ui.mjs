@@ -333,6 +333,17 @@ async function verifyMobile(width, height, flavor) {
   await glassPanel(page.getByRole('dialog', { name: 'Command palette' }), true);
   await page.keyboard.press('Escape');
   await page.setViewportSize({ width, height });
+  await button(page, 'Search').click();
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await glassPanel(palette, true);
+  const commandSearch = palette.getByRole('combobox', { name: 'Search commands and this activity' });
+  await commandSearch.fill('Dashboard');
+  const clearCommands = button(palette, 'Clear search');
+  assert.ok(await clearCommands.evaluate(node => node.offsetWidth >= 44 && node.offsetHeight >= 44),
+    'Clear search must have a 44×44px touch target');
+  await clearCommands.click();
+  assert.equal(await commandSearch.inputValue(), '');
+  await button(palette, 'Close dialog').click();
 
   await button(page, 'Switch ledger').click();
   const ledgers = page.getByRole('dialog', { name: 'Switch ledger' });
@@ -363,11 +374,21 @@ async function verifyMobile(width, height, flavor) {
   await button(wizard, 'Equals').click();
   const amount = page.getByLabel('Amount (IDR)');
   assert.equal(await amount.inputValue(), '2');
+  assert.equal(await amount.isEditable(), false);
+  assert.equal(await amount.getAttribute('inputmode'), 'none');
+  await button(wizard, '3').click();
+  assert.equal(await amount.inputValue(), '23');
+  await button(wizard, 'Backspace').click();
+  assert.equal(await amount.inputValue(), '2');
   assert.ok(await amount.evaluate(node => parseFloat(getComputedStyle(node).fontSize)) >= 16);
   await button(page, 'Continue').click();
   await wizard.getByRole('button', { name: /Mobile Cash/ }).waitFor();
-  await button(page, 'Quick Save').waitFor();
-  await button(page, 'Add details →').click();
+  const wizardActions = await Promise.all(['Back', 'Details', 'Save'].map(name => button(wizard, name).boundingBox()));
+  for (const box of wizardActions) {
+    assert.ok(box && box.width >= 44 && box.height >= 44 && box.y === wizardActions[0].y,
+      'Back, Details and Save must fit on one row');
+  }
+  await button(page, 'Details').click();
   await page.getByLabel('Description (optional)').fill('Mobile groceries');
   const notes = page.getByLabel('Notes (optional)');
   await notes.fill('Verified at ' + width + 'px');
@@ -403,16 +424,45 @@ async function verifyMobile(width, height, flavor) {
   const sheet = page.getByRole('dialog', { name: 'Activity filters' });
   await glassPanel(sheet, true);
   assert.equal(await sheet.getAttribute('data-slot'), 'drawer-content');
-  await sheet.getByRole('searchbox', { name: 'Search', exact: true }).fill('Mobile');
+  const header = sheet.locator('[data-slot="drawer-header"]');
+  assert.equal(await header.evaluate(node => getComputedStyle(node).flexDirection), 'row');
+  const closeBounds = await button(header, 'Close dialog').boundingBox();
+  assert.ok(closeBounds && closeBounds.width >= 44 && closeBounds.height >= 44);
+  const groups = sheet.locator('details');
+  assert.deepEqual(await groups.locator('summary').allTextContents(),
+    ['Account & Date', 'Category & Payee', 'Amount & Status', 'Advanced Options']);
+  assert.equal(await groups.first().getAttribute('open'), '');
+  const [accountBounds, fromBounds] = await Promise.all([
+    sheet.locator('select[name="account"]').boundingBox(),
+    sheet.locator('input[name="from"]').boundingBox()
+  ]);
+  assert.ok(accountBounds && fromBounds && Math.abs(accountBounds.width - fromBounds.width) < 1);
+  assert.ok(accountBounds.height >= 44 && fromBounds.height >= 44);
   await noOverflow('/transactions filters');
-  await button(sheet, 'Apply filters').click();
+  await sheet.getByText('Advanced Options', { exact: true }).click();
+  const applyFilters = button(sheet, 'Apply filters');
+  const footerBefore = await applyFilters.boundingBox();
+  const filterScroll = await sheet.locator('.modal-body').evaluate(node => {
+    node.scrollTop = node.scrollHeight;
+    return node.scrollTop;
+  });
+  assert.ok(filterScroll > 0);
+  assert.deepEqual(await applyFilters.boundingBox(), footerBefore);
+  await applyFilters.click();
   await sheet.waitFor({ state: 'hidden' });
+  await page.getByRole('searchbox', { name: 'Search activity' }).fill('Mobile');
   await page.getByRole('link', { name: /Opening balance/ }).waitFor({ state: 'hidden' });
   await page.getByRole('link', { name: /Mobile groceries/ }).waitFor();
+  const clearActivity = button(page, 'Clear activity search');
+  const clearActivityBounds = await clearActivity.boundingBox();
+  assert.ok(clearActivityBounds && clearActivityBounds.width >= 44 && clearActivityBounds.height >= 44);
+  await clearActivity.click();
+  await page.getByRole('link', { name: /Opening balance/ }).waitFor();
 
   await button(tabs, 'More').click();
   await page.getByRole('dialog', { name: 'More' }).getByRole('link', { name: 'Accounts', exact: true }).click();
-  await page.getByRole('link', { name: /Mobile Cash/ }).waitFor();
+  await page.waitForURL('**/accounts');
+  await page.getByRole('link', { name: /Mobile Cash/ }).and(page.locator('a[href^="/accounts/"]')).waitFor();
   await noOverflow('/accounts');
   await button(tabs, 'More').click();
   await page.getByRole('dialog', { name: 'More' }).getByRole('link', { name: 'Settings', exact: true }).click();
@@ -618,13 +668,17 @@ async function verifyCategoryIcons(width, height) {
 
   await open('Transactions');
   await page.getByRole('link', { name: 'New transaction', exact: true }).click();
-  await page.getByLabel('Amount (IDR)').fill('12000');
+  if (mobile) {
+    for (const key of ['1', '2', '000']) await button(page, key).click();
+  } else {
+    await page.getByLabel('Amount (IDR)').fill('12000');
+  }
   await button(page, 'Continue').click();
   const category = button(page, name);
   await category.locator('[data-category-icon="shopping-bag"]').waitFor();
   await noOverflow();
   await category.click();
-  await button(page, mobile ? 'Quick Save' : 'Save Transaction').click();
+  await button(page, mobile ? 'Save' : 'Save Transaction').click();
   await page.getByRole('heading', { name, exact: true }).waitFor();
   await page.locator('main [data-category-icon="shopping-bag"]').waitFor();
   if (mobile) await page.getByRole('link', { name: 'Back', exact: true }).click();
@@ -890,6 +944,7 @@ try {
   for (const flavor of ['latte', 'mocha']) {
     await verifyMobile(390, 844, flavor);
     await verifyMobile(360, 800, flavor);
+    await verifyMobile(412, 915, flavor);
     await verifyWorkspace(768, 1024, flavor);
     await verifyWorkspace(1280, 800, flavor);
   }

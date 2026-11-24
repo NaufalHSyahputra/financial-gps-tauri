@@ -1,4 +1,6 @@
 <script lang="ts">
+  import XIcon from '@lucide/svelte/icons/x';
+  import { Button } from '#lib/components/ui/button/index.js';
   import { MediaQuery } from 'svelte/reactivity';
   import * as Command from '#lib/components/ui/command/index.js';
   import { goto } from '$app/navigation';
@@ -13,6 +15,7 @@
   let { close, openThemes }: {close:()=>void;openThemes:()=>void}=$props();
   const launcher=useLauncher();
   let query=$state('');
+  let searchInput=$state<HTMLInputElement | null>(null);
   let hits=$state<SearchHit[]>([]);
   const mobile = new MediaQuery('(width < 48rem)');
   const entries=$derived([
@@ -45,7 +48,14 @@
 </script>
 
 {#snippet items()}
-  <Command.Input bind:value={query} placeholder="Search" aria-label="Search commands and this activity" />
+  <Command.Input bind:value={query} bind:ref={searchInput} placeholder="Search" aria-label="Search commands and this activity">
+    {#snippet trailing()}
+      {#if mobile.current && query.length > 0}
+        <Button size="icon" variant="ghost" class="order-last size-11 shrink-0" aria-label="Clear search"
+          onclick={()=>{query='';searchInput?.focus();}}><XIcon class="size-4" aria-hidden /></Button>
+      {/if}
+    {/snippet}
+  </Command.Input>
   <Command.List aria-label="Search results" class="p-2">
     {#each results as item, index (index)}
       <Command.Item value={item.group + ':' + index + ':' + item.label} class="min-h-9 rounded-lg data-selected:bg-accent max-md:min-h-11"

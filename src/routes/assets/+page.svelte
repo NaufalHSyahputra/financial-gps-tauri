@@ -56,7 +56,7 @@
 {#if assets.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>assetCursor=assets.value?.nextCursor??null}>Next assets</Button>{/if}
 <Card as="section" class="mt-5"><h2 class="section-title mb-3">Asset groups</h2>
   <ul class="grid gap-2 sm:grid-cols-2">{#each groups.value?.rows??[] as item (item.id)}<li class="flex min-w-0 items-center justify-between gap-2 border-b py-1">
-    <a href={'/assets/groups/'+item.id} class="min-w-0 break-words hover:underline">{item.draft.name} · {item.assetIds.length} assets{item.draft.archived?' · Archived':''}</a>
+    <a href={'/assets/groups/'+item.id} class="mobile-touch-link min-w-0 break-words hover:underline">{item.draft.name} · {item.assetIds.length} assets{item.draft.archived?' · Archived':''}</a>
     <RowActions itemName={item.draft.name} onEdit={()=>void goto('/assets/groups/'+item.id+'#asset-group-editor')}
       onDelete={()=>removal={id:item.id,name:item.draft.name,kind:'group'}}/>
   </li>{:else}<li class="text-muted-foreground">No asset groups found.</li>{/each}</ul>
@@ -67,6 +67,8 @@
 {#if removal}
   <Modal confirm title={removal.kind==='asset'?'Delete asset?':'Delete asset group?'} close={()=>removal=undefined}>
     <p>Delete {removal.name}?</p><Feedback error={task.error}/>
-    <Button variant="destructive" class="mt-3" disabled={task.busy} onclick={remove}>Confirm deletion</Button>
+    {#snippet footer()}
+      <Button variant="destructive" disabled={task.busy} onclick={remove}>Confirm deletion</Button>
+    {/snippet}
   </Modal>
 {/if}

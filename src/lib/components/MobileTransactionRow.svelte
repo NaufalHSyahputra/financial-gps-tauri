@@ -16,7 +16,7 @@
 </script>
 
 <li class="min-w-0 border-b border-line last:border-b-0">
-  <div class="flex min-w-0 items-center gap-2">
+  <div class="flex min-w-0 items-center gap-1">
   {#if select}
     <Label class="grid size-11 shrink-0 place-items-center">
       <NativeCheckbox  aria-label={'Select '+row.description} checked={selected}
@@ -39,6 +39,6 @@
       {#if running && row.runningBalance}<span class="numeric block text-xs text-muted-foreground">{privacy.money(row.runningBalance)}</span>{/if}
     </span>
   </a>
-  {#if actions}<div class="shrink-0 pr-1">{@render actions()}</div>{/if}
+  {#if actions}<div class="shrink-0 pr-2">{@render actions()}</div>{/if}
   </div>
 </li>

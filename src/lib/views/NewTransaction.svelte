@@ -299,15 +299,15 @@
     </form>
   {/if}
   </div>
-  <footer class="mobile-sticky-actions shrink-0 md:hidden">
+  <footer class={["mobile-sticky-actions shrink-0 md:hidden", step === 2 && "grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)]!"]}>
     {#if step===1}
       <Button variant="default" type="button" class="col-span-2" onclick={amountNext}>Continue</Button>
     {:else if step===2}
-      <Button variant="outline" type="button" onclick={back} aria-label="Back" disabled={task.busy}><NavIcon name="back"/></Button>
-      <Button variant="default" type="button"  onclick={save} disabled={task.busy}>Quick Save</Button>
-      <Button variant="outline" type="button" class="col-span-2 border-transparent" disabled={task.busy} onclick={()=>{if(validAccounts()) step=3;}}>Add details →</Button>
+      <Button variant="outline" type="button" class="size-11 p-0" onclick={back} aria-label="Back" disabled={task.busy}><NavIcon name="back"/></Button>
+      <Button variant="outline" type="button" disabled={task.busy} onclick={()=>{if(validAccounts()) step=3;}}>Details</Button>
+      <Button type="button" onclick={save} disabled={task.busy}>Save</Button>
     {:else}
-      <Button variant="outline" type="button" onclick={back} aria-label="Back" disabled={task.busy}><NavIcon name="back"/></Button>
+      <Button variant="outline" type="button" class="size-11 p-0" onclick={back} aria-label="Back" disabled={task.busy}><NavIcon name="back"/></Button>
       <Button variant="default" type="submit" form={detailsForm}  disabled={task.busy}>Save Transaction</Button>
     {/if}
   </footer>

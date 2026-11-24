@@ -4,6 +4,7 @@
 </script>
 
 <script lang="ts">
+  import XIcon from '@lucide/svelte/icons/x';
   import { tick, untrack } from 'svelte';
   import { MediaQuery } from 'svelte/reactivity';
   import { commands, type AccountChoice, type Category_Serialize, type Payee, type GroupSummary, type LedgerFilter_Deserialize, type DateBasis, type TxStatus, type Direction, type FlagState } from '../drivers/runtime';
@@ -43,7 +44,26 @@
     direction=value;
     commitFilter({...filter,direction:value||undefined});
   }
-  let text=$state('');
+  let text=$state(initial.text ?? '');
+  let searchInput=$state<HTMLInputElement | null>(null);
+
+  function searchActivity(value: string) {
+    const term = value.trim();
+    if (term !== (filter.text ?? '')) commitFilter({...filter, text: term || undefined});
+  }
+
+  $effect(() => {
+    if (!mobile.current) return;
+    const value = text;
+    const timer = setTimeout(() => searchActivity(value), 220);
+    return () => clearTimeout(timer);
+  });
+
+  function clearSearch() {
+    text = '';
+    searchActivity('');
+    searchInput?.focus();
+  }
   let from=$state(initial.range?.from ?? '');
   let to=$state(initial.range?.to ?? '');
   let basis=$state<DateBasis>(initial.basis ?? 'reporting');
@@ -78,7 +98,7 @@
       const tri=(value:''|'yes'|'no')=>value===''?undefined:value==='yes';
       const bounds=currency&&(minimum||maximum)?{currency,minimum:minimum?privacy.amount(currency,minimum).minor:null,maximum:maximum?privacy.amount(currency,maximum).minor:null}:undefined;
       commitFilter({basis,range:{from:from||undefined,to:to||undefined},accountIds:account?[account]:[],categoryIds:category?[category]:[],
-        text:text||undefined,status:status||undefined,direction:direction||undefined,sort:{field:sort,ascending},tags:tags.split(/[, ]+/).filter(Boolean),
+        text:(mobile.current ? text.trim() : text)||undefined,status:status||undefined,direction:direction||undefined,sort:{field:sort,ascending},tags:tags.split(/[, ]+/).filter(Boolean),
         payeeIds:payee?[payee]:[],groupIds:group?[group]:[],aliasIds:alias?[alias]:[],statementId:statement||undefined,
         flagState:flag||undefined,transfer:tri(transfer),ignored:tri(excluded),unbilled,uncategorized:uncat,pnlOnly:pnl,
         entryKind:entry||undefined,includeOpening,nativeAmount:bounds});
@@ -95,44 +115,177 @@
   <Button variant="ghost" type="button" class="mobile-chip" onclick={()=>void openFilters('from')}>Date</Button>
   <Button variant="ghost" type="button" class="mobile-chip" onclick={()=>void openFilters()}>Filters</Button>
 </div>
-<div class="mb-3 flex flex-wrap items-center gap-2 md:hidden">
-  <Button variant="outline"  type="button" onclick={()=>void openFilters('search')}>Search activity</Button>
+<div class="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:hidden">
+  <form class="relative min-w-0" onsubmit={event=>{event.preventDefault();searchActivity(text);}}>
+    <Input type="search" bind:value={text} bind:ref={searchInput} aria-label="Search activity"
+      placeholder="Search activity" class={['[&::-webkit-search-cancel-button]:appearance-none', text.length && 'pr-12']} />
+    {#if text.length > 0}
+      <Button size="icon" variant="ghost" class="absolute inset-y-0 right-0 size-11" aria-label="Clear activity search"
+        onclick={clearSearch}><XIcon class="size-4" aria-hidden /></Button>
+    {/if}
+  </form>
   <Button variant="outline" type="button" aria-pressed={selecting} onclick={()=>{selecting=!selecting;if(!selecting)clearSelection();}}>{selecting?'Done selecting':'Select'}</Button>
 </div>
+{#snippet accountField()}
+  <Label class="field">Account<NativeSelect name="account" bind:value={account} onchange={()=>{statement='';alias='';}}><option value="">All accounts</option>{#each accounts??[] as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet basisField()}
+  <Label class="field">Date basis<NativeSelect bind:value={basis}><option value="reporting">Reporting date</option><option value="bank">Bank date</option><option value="effective">Effective date</option></NativeSelect></Label>
+{/snippet}
+{#snippet fromField()}
+  <Label class="field">From<Input type="date" name="from" bind:value={from}/></Label>
+{/snippet}
+{#snippet toField()}
+  <Label class="field">Through<Input type="date" bind:value={to}/></Label>
+{/snippet}
+{#snippet categoryField()}
+  <Label class="field">Category<NativeSelect bind:value={category}><option value="">All</option>{#each categories??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet payeeField()}
+  <Label class="field">Person or store<NativeSelect bind:value={payee}><option value="">All</option>{#each payees??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet groupField()}
+  {#if privacy.visible('groups')}<Label class="field">Shared group<NativeSelect bind:value={group}><option value="">All</option>{#each groups??[] as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</NativeSelect></Label>{/if}
+{/snippet}
+{#snippet statusField()}
+  <Label class="field">Status<NativeSelect bind:value={status}><option value="">All</option><option value="posted">Confirmed</option><option value="pending">Pending</option><option value="projected">Expected</option></NativeSelect></Label>
+{/snippet}
+{#snippet directionField()}
+  <Label class="field">Direction<NativeSelect bind:value={direction}><option value="">Both</option><option value="debit">Money out</option><option value="credit">Money in</option></NativeSelect></Label>
+{/snippet}
+{#snippet entryField()}
+  <Label class="field">Entry type<NativeSelect bind:value={entry}><option value="">All</option><option value="ordinary">Regular transaction</option><option value="opening">Starting balance</option><option value="adjustment">Adjustment</option></NativeSelect></Label>
+{/snippet}
+{#snippet tagsField()}
+  <Label class="field">Tags<Input bind:value={tags} placeholder="Comma-separated tags"/></Label>
+{/snippet}
+{#snippet statementField()}
+  <Label class="field">Statement<NativeSelect bind:value={statement}><option value="">All</option>{#each statements.value??[] as item (item.id)}<option value={item.id}>{item.draft.closeOn}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet aliasField()}
+  <Label class="field">Linked card alias ID<Input bind:value={alias}/></Label>
+{/snippet}
+{#snippet flagField()}
+  <Label class="field">Flag<NativeSelect bind:value={flag}><option value="">Any</option><option value="flagged">Flagged</option><option value="overdue">Overdue</option><option value="dueWithinWeek">Due this week</option></NativeSelect></Label>
+{/snippet}
+{#snippet transferField()}
+  <Label class="field">Transfer<NativeSelect bind:value={transfer}><option value="">Any</option><option value="yes">Linked</option><option value="no">Unlinked</option></NativeSelect></Label>
+{/snippet}
+{#snippet excludedField()}
+  <Label class="field">Ignored<NativeSelect bind:value={excluded}><option value="">Any</option><option value="yes">Only ignored</option><option value="no">Hide ignored</option></NativeSelect></Label>
+{/snippet}
+{#snippet sortField()}
+  <Label class="field">Sort by<NativeSelect bind:value={sort}>{#each transactionSorts as [value,label] (value)}<option value={value}>{label}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet currencyField()}
+  <Label class="field">Amount currency<NativeSelect bind:value={currency}><option value="">No amount filter</option>{#each privacy.currencies as item (item.code)}<option value={item.code}>{item.code}</option>{/each}</NativeSelect></Label>
+{/snippet}
+{#snippet amountsField()}
+  <MoneyField label="Minimum" bind:value={minimum} required={false}/><MoneyField label="Maximum" bind:value={maximum} required={false}/>
+{/snippet}
+{#snippet unbilledField()}
+  <Label class="check"><NativeCheckbox  bind:checked={unbilled}/> Only unbilled</Label>
+{/snippet}
+{#snippet uncatField()}
+  <Label class="check"><NativeCheckbox  bind:checked={uncat}/> Uncategorized only</Label>
+{/snippet}
+{#snippet pnlField()}
+  <Label class="check"><NativeCheckbox  bind:checked={pnl}/> Income and expenses only</Label>
+{/snippet}
+{#snippet includeOpeningField()}
+  <Label class="check"><NativeCheckbox  bind:checked={includeOpening}/> Include opening balances</Label>
+{/snippet}
+{#snippet ascendingField()}
+  <Label class="check"><NativeCheckbox  bind:checked={ascending}/> Ascending</Label>
+{/snippet}
+{#snippet runningField()}
+  <Label class="check"><NativeCheckbox  bind:checked={running}/> Running balance</Label>
+{/snippet}
+
 {#snippet filters(mobile: boolean)}
-<form id={mobile?filterForm:undefined} onsubmit={apply}>
-  <div class="grid gap-3 sm:grid-cols-2">
-    {#if mobile}<Label class="field">Search<Input type="search" name="search" bind:value={text} placeholder="Description, notes, person, or store"/></Label>{/if}
-    <Label class="field">Account<NativeSelect name="account" bind:value={account} onchange={()=>{statement='';alias='';}}><option value="">All accounts</option>{#each accounts??[] as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</NativeSelect></Label>
-    <Label class="field">Date basis<NativeSelect bind:value={basis}><option value="reporting">Reporting date</option><option value="bank">Bank date</option><option value="effective">Effective date</option></NativeSelect></Label>
-    <Label class="field">From<Input type="date" name="from" bind:value={from}/></Label>
-    <Label class="field">Through<Input type="date" bind:value={to}/></Label>
-  </div>
+<form id={mobile ? filterForm : undefined} class={mobile ? 'space-y-2' : undefined} onsubmit={apply}>
+  {#if mobile}
+    <details class="rounded-lg border border-line px-3" open>
+      <summary class="min-h-11 cursor-pointer text-sm font-semibold">Account & Date</summary>
+      <div class="grid min-w-0 gap-3 pb-3">
+        {@render accountField()}
+        {@render basisField()}
+        {@render fromField()}
+        {@render toField()}
+      </div>
+    </details>
+    <details class="rounded-lg border border-line px-3">
+      <summary class="min-h-11 cursor-pointer text-sm font-semibold">Category & Payee</summary>
+      <div class="grid min-w-0 gap-3 pb-3">
+        {@render categoryField()}
+        {@render payeeField()}
+        {@render groupField()}
+        {@render uncatField()}
+      </div>
+    </details>
+    <details class="rounded-lg border border-line px-3">
+      <summary class="min-h-11 cursor-pointer text-sm font-semibold">Amount & Status</summary>
+      <div class="grid min-w-0 gap-3 pb-3">
+        {@render currencyField()}
+        {@render amountsField()}
+        {@render statusField()}
+        {@render directionField()}
+        {@render flagField()}
+      </div>
+    </details>
+    <details class="rounded-lg border border-line px-3">
+      <summary class="min-h-11 cursor-pointer text-sm font-semibold">Advanced Options</summary>
+      <div class="grid min-w-0 gap-3 pb-3">
+        {@render entryField()}
+        {@render tagsField()}
+        {@render statementField()}
+        {@render aliasField()}
+        {@render transferField()}
+        {@render excludedField()}
+        {@render sortField()}
+        {@render unbilledField()}
+        {@render pnlField()}
+        {@render includeOpeningField()}
+        {@render ascendingField()}
+        {@render runningField()}
+      </div>
+    </details>
+  {:else}
+    <div class="grid gap-3 sm:grid-cols-2">
+      {@render accountField()}
+      {@render basisField()}
+      {@render fromField()}
+      {@render toField()}
+    </div>
     <div class="mt-3 grid gap-3 sm:grid-cols-2">
-      <Label class="field">Category<NativeSelect bind:value={category}><option value="">All</option>{#each categories??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
-      <Label class="field">Person or store<NativeSelect bind:value={payee}><option value="">All</option>{#each payees??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
-      {#if privacy.visible('groups')}<Label class="field">Shared group<NativeSelect bind:value={group}><option value="">All</option>{#each groups??[] as item (item.id)}<option value={item.id}>{item.name}</option>{/each}</NativeSelect></Label>{/if}
-      <Label class="field">Status<NativeSelect bind:value={status}><option value="">All</option><option value="posted">Confirmed</option><option value="pending">Pending</option><option value="projected">Expected</option></NativeSelect></Label>
-      <Label class="field">Direction<NativeSelect bind:value={direction}><option value="">Both</option><option value="debit">Money out</option><option value="credit">Money in</option></NativeSelect></Label>
-      <Label class="field">Entry type<NativeSelect bind:value={entry}><option value="">All</option><option value="ordinary">Regular transaction</option><option value="opening">Starting balance</option><option value="adjustment">Adjustment</option></NativeSelect></Label>
-      <Label class="field">Tags<Input bind:value={tags} placeholder="Comma-separated tags"/></Label>
-      <Label class="field">Statement<NativeSelect bind:value={statement}><option value="">All</option>{#each statements.value??[] as item (item.id)}<option value={item.id}>{item.draft.closeOn}</option>{/each}</NativeSelect></Label>
-      <Label class="field">Linked card alias ID<Input bind:value={alias}/></Label>
-      <Label class="field">Flag<NativeSelect bind:value={flag}><option value="">Any</option><option value="flagged">Flagged</option><option value="overdue">Overdue</option><option value="dueWithinWeek">Due this week</option></NativeSelect></Label>
-      <Label class="field">Transfer<NativeSelect bind:value={transfer}><option value="">Any</option><option value="yes">Linked</option><option value="no">Unlinked</option></NativeSelect></Label>
-      <Label class="field">Ignored<NativeSelect bind:value={excluded}><option value="">Any</option><option value="yes">Only ignored</option><option value="no">Hide ignored</option></NativeSelect></Label>
-      <Label class="field">Sort by<NativeSelect bind:value={sort}>{#each transactionSorts as [value,label] (value)}<option value={value}>{label}</option>{/each}</NativeSelect></Label>
-      <Label class="field">Amount currency<NativeSelect bind:value={currency}><option value="">No amount filter</option>{#each privacy.currencies as item (item.code)}<option value={item.code}>{item.code}</option>{/each}</NativeSelect></Label>
-      <MoneyField label="Minimum" bind:value={minimum} required={false}/><MoneyField label="Maximum" bind:value={maximum} required={false}/>
+      {@render categoryField()}
+      {@render payeeField()}
+      {@render groupField()}
+      {@render statusField()}
+      {@render directionField()}
+      {@render entryField()}
+      {@render tagsField()}
+      {@render statementField()}
+      {@render aliasField()}
+      {@render flagField()}
+      {@render transferField()}
+      {@render excludedField()}
+      {@render sortField()}
+      {@render currencyField()}
+      {@render amountsField()}
     </div>
     <div class="mt-3 flex flex-wrap gap-4">
-      <Label class="check"><NativeCheckbox  bind:checked={unbilled}/> Only unbilled</Label>
-      <Label class="check"><NativeCheckbox  bind:checked={uncat}/> Uncategorized only</Label>
-      <Label class="check"><NativeCheckbox  bind:checked={pnl}/> Income and expenses only</Label>
-      <Label class="check"><NativeCheckbox  bind:checked={includeOpening}/> Include opening balances</Label>
-      <Label class="check"><NativeCheckbox  bind:checked={ascending}/> Ascending</Label>
+      {@render unbilledField()}
+      {@render uncatField()}
+      {@render pnlField()}
+      {@render includeOpeningField()}
+      {@render ascendingField()}
     </div>
-  <div class="mt-3 flex flex-wrap items-center gap-4">{#if !mobile}<Button variant="default" type="submit" >Apply filters</Button>{/if}<Label class="check"><NativeCheckbox  bind:checked={running}/> Running balance</Label></div>
+    <div class="mt-3 flex flex-wrap items-center gap-4">
+      <Button variant="default" type="submit">Apply filters</Button>
+      {@render runningField()}
+    </div>
+  {/if}
 </form>
 {/snippet}
 {#if filterSheet}

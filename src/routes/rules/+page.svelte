@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
@@ -104,7 +105,7 @@
   {:else}<TableRow><TableCell colspan={4}>No rules configured.</TableCell></TableRow>{/each}
 </TableBody></Table></div>
 {#if form}<Modal title={selected?'Edit rule':'New rule'} close={()=>form=false}>
-  <form class="space-y-4" onsubmit={save}>
+  <form id={modalForm + '-rule'} class="space-y-4" onsubmit={save}>
     <Label class="field">Rule name<Input required bind:value={draft.name}/></Label>
     <div class="flex flex-wrap gap-3"><Label class="check"><NativeCheckbox  bind:checked={draft.enabled}/> Enabled</Label><Label class="check"><NativeCheckbox  bind:checked={draft.applyExisting}/> Allow retroactive apply</Label><Label class="check"><NativeCheckbox  bind:checked={draft.overwriteExistingCategory}/> Overwrite existing category</Label></div>
     <Label class="field">Match<NativeSelect bind:value={draft.conditions.op}><option value="and">All conditions (AND)</option><option value="or">Any condition (OR)</option></NativeSelect></Label>
@@ -137,16 +138,29 @@
       </div>
     {/each}
     <Button variant="outline" type="button" onclick={()=>draft.actions=[...draft.actions,{kind:'category',value:''}]}>Add action</Button>
-    <Feedback error={task.error}/><div class="flex gap-2"><Button variant="default" type="submit"  disabled={task.busy}>Save rule</Button><Button variant="outline" type="button" disabled={task.busy} onclick={()=>dryRun()}>Dry run</Button></div>
+    <Feedback error={task.error}/>
   </form>
+  {#snippet footer()}
+    <div class="flex flex-wrap gap-2">
+      <Button variant="default" type="submit" form={modalForm + '-rule'}  disabled={task.busy}>Save rule</Button>
+      <Button variant="outline" type="button" disabled={task.busy} onclick={()=>dryRun()}>Dry run</Button>
+    </div>
+  {/snippet}
 </Modal>{/if}
 {#if preview}<Modal title="Rule preview" close={()=>preview=null}>
   <p>{preview.matched} matched out of {preview.scanned}. {preview.wouldChange} would change.</p>
   <ul class="mt-3 max-h-64 divide-y divide-line overflow-auto">{#each preview.samples as row (row.id)}
-    <li class="py-2 text-sm"><a class="underline" href={'/transactions/'+row.id}>View posting</a> · {row.changedFields.join(', ')||'No changes'}</li>
+    <li class="py-2 text-sm"><a class="mobile-touch-link underline" href={'/transactions/'+row.id}>View posting</a> · {row.changedFields.join(', ')||'No changes'}</li>
   {/each}</ul><Feedback error={task.error}/>
-  {#if previewSaved}<Button variant="default" class="mt-4" onclick={apply} disabled={task.busy}>Apply preview</Button>{/if}
+  {#snippet footer()}
+    {#if previewSaved}<Button variant="default" onclick={apply} disabled={task.busy}>Apply preview</Button>{/if}
+  {/snippet}
 </Modal>{/if}
-{#if deleting}<Modal confirm title={'Delete '+deleting.draft.name+'?'} close={()=>deleting=null}><Button variant="default"  onclick={()=>task.run(async()=>{
+{#if deleting}<Modal confirm title={'Delete '+deleting.draft.name+'?'} close={()=>deleting=null}><Feedback error={task.error}/>
+
+  {#snippet footer()}
+    <Button variant="default"  onclick={()=>task.run(async()=>{
   if(deleting)await session.call(commands.ruleDelete(session.mutation(),{id:deleting.id}));deleting=null;rules.refresh();
-})}>Confirm deletion</Button><Feedback error={task.error}/></Modal>{/if}
+})}>Confirm deletion</Button>
+  {/snippet}
+</Modal>{/if}

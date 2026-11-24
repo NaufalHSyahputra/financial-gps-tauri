@@ -1,4 +1,5 @@
 <script lang="ts">
+  import XIcon from '@lucide/svelte/icons/x';
   import { MediaQuery } from 'svelte/reactivity';
   import type { Snippet } from 'svelte';
   import { Button } from '#lib/components/ui/button/index.js';
@@ -14,16 +15,19 @@
 </script>
 
 {#snippet body()}
-  <div class="modal-body min-h-0 overflow-y-auto overscroll-contain px-4 py-4 md:px-5">{@render children()}</div>
-  {#if footer}<div class="modal-footer shrink-0 border-t border-border px-4 pt-3 md:px-5">{@render footer()}</div>{/if}
+  <div class="modal-body min-h-0 overflow-y-auto overscroll-contain px-4 py-4 md:px-5">
+    {@render children()}
+    {#if !mobile.current && footer}<div class="mt-3 empty:hidden">{@render footer()}</div>{/if}
+  </div>
+  {#if mobile.current && footer}<div class="modal-footer empty:hidden">{@render footer()}</div>{/if}
 {/snippet}
 
 {#if mobile.current}
   <Drawer.Root open onOpenChange={change} shouldScaleBackground={false} handleOnly>
     <Drawer.Content>
-      <Drawer.Header class="flex shrink-0 items-center justify-between border-b border-border px-4 py-1 text-left">
+      <Drawer.Header class="flex shrink-0 flex-row items-center justify-between gap-2 border-b border-border px-4 py-2 !text-left">
         <Drawer.Title>{title}</Drawer.Title>
-        <Button type="button" variant="ghost" onclick={close} aria-label="Close dialog">×</Button>
+        <Button type="button" variant="ghost" size="icon" class="shrink-0 max-md:size-11" onclick={close} aria-label="Close dialog"><XIcon class="size-4" aria-hidden /></Button>
       </Drawer.Header>
       {@render body()}
     </Drawer.Content>
@@ -34,7 +38,7 @@
       <AlertDialog.Content class="data-[size=default]:max-w-[min(36rem,calc(100%-2rem))]! flex max-h-[90dvh] w-full flex-col gap-0 p-0 sm:max-w-xl">
         <AlertDialog.Header class="flex shrink-0 flex-row items-center justify-between border-b border-border px-5 py-2">
           <AlertDialog.Title>{title}</AlertDialog.Title>
-          <AlertDialog.Cancel variant="ghost" aria-label="Close dialog">×</AlertDialog.Cancel>
+          <AlertDialog.Cancel variant="ghost" size="icon" class="shrink-0 max-md:size-11" aria-label="Close dialog"><XIcon class="size-4" aria-hidden /></AlertDialog.Cancel>
         </AlertDialog.Header>
         {@render body()}
       </AlertDialog.Content>
@@ -44,7 +48,7 @@
       <Dialog.Content showCloseButton={false} class="flex max-h-[90dvh] w-full flex-col gap-0 p-0 sm:max-w-2xl">
         <Dialog.Header class="flex shrink-0 flex-row items-center justify-between border-b border-border px-5 py-2">
           <Dialog.Title>{title}</Dialog.Title>
-          <Button type="button" variant="ghost" onclick={close} aria-label="Close dialog">×</Button>
+          <Button type="button" variant="ghost" size="icon" class="shrink-0 max-md:size-11" onclick={close} aria-label="Close dialog"><XIcon class="size-4" aria-hidden /></Button>
         </Dialog.Header>
         {@render body()}
       </Dialog.Content>

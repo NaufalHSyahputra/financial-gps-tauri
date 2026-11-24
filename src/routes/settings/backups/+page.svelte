@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
@@ -91,13 +92,17 @@
   {#if cursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=null}>First backups</Button>{/if}{#if backups.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=backups.value?.nextCursor??null}>Next backups</Button>{/if}
 </Card>
 {#if mode==='restore'}<RestoreFlow backup={selected} {close}/>
-{:else if mode==='manual'}<Modal title="Create encrypted backup" {close}><form class="space-y-3" autocomplete="off" onsubmit={create}>
+{:else if mode==='manual'}<Modal title="Create encrypted backup" {close}><form id={modalForm + '-backup'} class="space-y-3" autocomplete="off" onsubmit={create}>
   <Label class="field">Archive passphrase<Input type="password" autocomplete="off" bind:value={password} required/></Label>
   <p class="text-sm text-muted-foreground">You’ll need this passphrase to verify and restore the archive.</p>
   <div class="flex flex-wrap items-center gap-2"><span class="break-all text-sm text-muted-foreground">{file?.displayName??'App storage'}</span><Button variant="outline" type="button" disabled={manualTask.busy} onclick={()=>pick('backupWrite')}>Choose file…</Button>{#if file}<Button variant="outline" type="button" onclick={()=>file=undefined}>Use app storage</Button>{/if}</div>
-  <Feedback error={manualTask.error}/><Button variant="default" type="submit"  disabled={manualTask.busy}>Create encrypted backup</Button>
-</form></Modal>
-{:else if mode==='schedule'}<Modal title="Backup schedule" {close}><form class="space-y-3" autocomplete="off" onsubmit={setSchedule}>
+  <Feedback error={manualTask.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-backup'}  disabled={manualTask.busy}>Create encrypted backup</Button>
+  {/snippet}
+</Modal>
+{:else if mode==='schedule'}<Modal title="Backup schedule" {close}><form id={modalForm + '-backup-schedule'} class="space-y-3" autocomplete="off" onsubmit={setSchedule}>
   <Label class="check"><NativeCheckbox  bind:checked={enabled}/> Enable scheduled backups</Label>
   {#if enabled}
     <div class="form-grid">
@@ -113,7 +118,16 @@
   <Label class="field">Backup passphrase in secure vault<NativeSelect bind:value={willRemember}><option value="keep">{schedules.value?.remembered?'Keep stored passphrase':'Leave unconfigured'}</option><option value="store">Store or replace passphrase</option>{#if schedules.value?.remembered}<option value="remove">Remove stored passphrase</option>{/if}</NativeSelect></Label>
   {#if willRemember==='store'}<Label class="field">Archive passphrase<Input type="password" autocomplete="off" bind:value={scheduleSecret} required/></Label>{/if}
   {#if enabled && (willRemember==='remove' || willRemember==='keep' && !schedules.value?.remembered)}<p class="text-sm text-muted-foreground">Automatic backups need an archive passphrase in the system keychain.</p>{/if}
-  <Feedback error={scheduleTask.error}/><Button variant="default" type="submit"  disabled={scheduleTask.busy}>Save backup schedule</Button>
-</form></Modal>
-{:else if mode==='remove' && selected}<Modal confirm title="Delete backup" {close}><p>Permanently delete {selected.fileName}?</p><Feedback error={removeTask.error}/><Button variant="destructive" class="mt-3" disabled={removeTask.busy} onclick={()=>void removeTask.run(async()=>{if(!selected)return;await session.call(commands.backupRemove(session.mutation(),{id:selected.id,confirm:true}));close();backups.refresh();})}>Delete archive</Button></Modal>
+  <Feedback error={scheduleTask.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-backup-schedule'}  disabled={scheduleTask.busy}>Save backup schedule</Button>
+  {/snippet}
+</Modal>
+{:else if mode==='remove' && selected}<Modal confirm title="Delete backup" {close}><p>Permanently delete {selected.fileName}?</p><Feedback error={removeTask.error}/>
+
+  {#snippet footer()}
+    <Button variant="destructive" disabled={removeTask.busy} onclick={()=>void removeTask.run(async()=>{if(!selected)return;await session.call(commands.backupRemove(session.mutation(),{id:selected.id,confirm:true}));close();backups.refresh();})}>Delete archive</Button>
+  {/snippet}
+</Modal>
 {/if}

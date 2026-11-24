@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Button } from '#lib/components/ui/button/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
@@ -59,10 +60,10 @@
 </script>
 <Modal title="Restore encrypted backup" close={()=>{if(!task.busy)close();}}>
   {#if !preview}
-    <form class="space-y-3" autocomplete="off" onsubmit={verify}>
+    <form id={modalForm + '-verify'} class="space-y-3" autocomplete="off" onsubmit={verify}>
       <div class="flex flex-wrap items-center gap-3"><span class="break-all text-sm text-muted-foreground">{backup?.fileName??source?.displayName??'Choose an archive'}</span>{#if !backup}<Button variant="outline" type="button" disabled={task.busy} onclick={()=>pick('restoreRead')}>Choose backup…</Button>{/if}</div>
       <Label class="field">Archive passphrase<Input type="password" autocomplete="off" bind:value={passphrase} required/></Label>
-      <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy || !backup && !source}>Verify backup</Button>
+      <Feedback error={task.error}/>
     </form>
   {:else}
     <section class="mb-4 rounded border border-line bg-ground p-3">
@@ -75,7 +76,7 @@
       {#if preview.warnings.includes('localCredentialsExcluded')}<p class="mt-2 text-sm text-muted-foreground">Credentials stored in the secure vault are excluded from the archive.</p>{/if}
       {#if mode==='new' && preview.warnings.includes('newLedgerIdentity')}<p class="mt-2 text-sm text-muted-foreground">Restoring as new gives the activity file a new identity.</p>{/if}
     </section>
-    <form class="space-y-3" autocomplete="off" onsubmit={apply}>
+    <form id={modalForm + '-restore'} class="space-y-3" autocomplete="off" onsubmit={apply}>
       {#if session.active}<Label class="field">Restore destination<NativeSelect bind:value={mode} onchange={()=>acknowledge=false}><option value="new">Create a new activity file</option><option value="replace">Replace the open activity</option></NativeSelect></Label>{/if}
       {#if mode==='new'}
         <Label class="field">New activity name<Input bind:value={name} maxlength={256} required/></Label>
@@ -90,8 +91,14 @@
         <Label class="field">New activity passphrase or PIN<Input type="password" autocomplete="off" bind:value={credential} required/></Label>
         <Label class="field">Repeat new credential<Input type="password" autocomplete="off" bind:value={confirmCredential} required/></Label>
       {/if}
-      <Feedback error={task.error}/><Button variant="outline" type="submit" class={mode==='replace'?'danger':'primary'} disabled={task.busy}>{mode==='replace'?'Confirm replacement':'Restore as new activity'}</Button>
+      <Feedback error={task.error}/>
     </form>
   {/if}
-  {#if phase}<div class="mt-3 flex items-center gap-3"><p role="status" class="text-sm text-muted-foreground">{phase}</p>{#if jobs.progress[jobId]?.cancellable}<Button variant="outline" type="button" onclick={()=>void jobs.cancel(jobId).catch(()=>{})}>Cancel operation</Button>{/if}</div>{/if}
+  {#if phase}<div class="mt-3 flex items-center gap-3"><p role="status" class="text-sm text-muted-foreground">{phase}</p></div>{/if}
+  {#snippet footer()}
+    <div class="flex flex-wrap gap-2">
+      {#if !preview}<Button variant="default" type="submit" form={modalForm + '-verify'}  disabled={task.busy || !backup && !source}>Verify backup</Button>{:else}<Button variant="outline" type="submit" form={modalForm + '-restore'} class={mode==='replace'?'danger':'primary'} disabled={task.busy}>{mode==='replace'?'Confirm replacement':'Restore as new activity'}</Button>{/if}
+      {#if phase}{#if jobs.progress[jobId]?.cancellable}<Button variant="outline" type="button" onclick={()=>void jobs.cancel(jobId).catch(()=>{})}>Cancel operation</Button>{/if}{/if}
+    </div>
+  {/snippet}
 </Modal>

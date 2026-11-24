@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import CategoryIcon from '#lib/icons/CategoryIcon.svelte';
   import CategoryIconPicker from '#lib/icons/CategoryIconPicker.svelte';
@@ -99,7 +100,7 @@
   {:else}<TableRow><TableCell colspan={3} class="text-muted-foreground">No matching {categoryMode?'categories':'people or stores'}.</TableCell></TableRow>{/each}
 </TableBody></Table></div>
 <div class="mt-3 flex gap-2"><Button variant="outline" disabled={!cursor} onclick={()=>cursor=undefined}>First page</Button><Button variant="outline" disabled={!page?.nextCursor} onclick={()=>cursor=page?.nextCursor}>Next page</Button></div>
-{#if edit}<Modal title={(target?'Edit ':'New ')+noun} close={()=>edit=false}><form class="space-y-3" onsubmit={save}>
+{#if edit}<Modal title={(target?'Edit ':'New ')+noun} close={()=>edit=false}><form id={modalForm + '-catalog'} class="space-y-3" onsubmit={save}>
   <Label class="field">Name<Input required bind:value={name}/></Label>
   {#if categoryMode}
     <Label class="field">Type<NativeSelect bind:value={kind}><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option></NativeSelect></Label>
@@ -107,20 +108,31 @@
     <Label class="field">Group<NativeSelect bind:value={groupId}><option value="">None</option>{#each groups.value?.rows??[] as group (group.id)}<option value={group.id}>{group.draft.name}</option>{/each}</NativeSelect></Label>
     <Label class="check"><NativeCheckbox  bind:checked={hidden}/> Hide category</Label><Label class="check"><NativeCheckbox  bind:checked={ignored}/> Ignore in calculations</Label>
   {/if}
-  <Label class="check"><NativeCheckbox  bind:checked={archived}/> Archived</Label><Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save {noun}</Button>
-</form></Modal>{/if}
-{#if groupEdit}<Modal title="Category group" close={()=>groupEdit=false}><form class="space-y-3" onsubmit={event=>{event.preventDefault();void task.run(async()=>{
+  <Label class="check"><NativeCheckbox  bind:checked={archived}/> Archived</Label><Feedback error={task.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-catalog'}  disabled={task.busy}>Save {noun}</Button>
+  {/snippet}
+</Modal>{/if}
+{#if groupEdit}<Modal title="Category group" close={()=>groupEdit=false}><form id={modalForm + '-category-group'} class="space-y-3" onsubmit={event=>{event.preventDefault();void task.run(async()=>{
   await session.call(commands.categoryGroupSave(session.mutation(),{target,draft:{name,sortOrder:groupOrder}}));groupEdit=false;refresh();});}}>
   <Label class="field">Name<Input required bind:value={name}/></Label><Label class="field">Sort order<Input type="number" required bind:value={groupOrder}/></Label>
-  <Feedback error={task.error}/><Button variant="default" type="submit" >Save group</Button>
-</form></Modal>{/if}
+  <Feedback error={task.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-category-group'} >Save group</Button>
+  {/snippet}
+</Modal>{/if}
 {#if removal}<Modal confirm title={'Delete '+removal.name+'?'} close={()=>removal=null}>
   <Label class="field">Move related transactions to<NativeSelect bind:value={replacement}><option value="">No replacement</option>
     {#each (removal.group?groups.value?.rows:page?.rows)??[] as item (item.id)}
       {#if item.id!==removal.id}<option value={item.id}>{item.draft.name}</option>{/if}
     {/each}
   </NativeSelect></Label>
-  <Feedback error={task.error}/><Button variant="default" class="mt-4" onclick={remove}>Confirm deletion</Button>
+  <Feedback error={task.error}/>
+  {#snippet footer()}
+    <Button variant="default" onclick={remove}>Confirm deletion</Button>
+  {/snippet}
 </Modal>{/if}
 {#if merging}<Modal title="Combine duplicate names" close={()=>merging=false}>
   <Label class="field">Keep this name<NativeSelect bind:value={replacement}><option value="">Choose a name</option>{#each payees.value?.rows??[] as item (item.id)}<option value={item.id}>{item.draft.name}</option>{/each}</NativeSelect></Label>
@@ -129,6 +141,8 @@
       {#if item.id!==replacement}<Label class="check"><NativeCheckbox checked={mergeFrom.includes(item.id)} onchange={event=>mergeFrom=event.currentTarget.checked?[...mergeFrom,item.id]:mergeFrom.filter(id=>id!==item.id)} /> {item.draft.name}</Label>{/if}
     {/each}
   </fieldset><Feedback error={task.error}/>
-  <Button variant="default" class="mt-4" disabled={!replacement||!mergeFrom.some(id=>id!==replacement)} onclick={()=>task.run(async()=>{
+  {#snippet footer()}
+    <Button variant="default" disabled={!replacement||!mergeFrom.some(id=>id!==replacement)} onclick={()=>task.run(async()=>{
     await session.call(commands.payeeMerge(session.mutation(),{fromIds:mergeFrom.filter(id=>id!==replacement),intoId:replacement,confirm:true}));merging=false;refresh();})}>Merge and move references</Button>
+  {/snippet}
 </Modal>{/if}

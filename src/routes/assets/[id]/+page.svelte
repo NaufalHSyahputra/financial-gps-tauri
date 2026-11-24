@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -123,7 +124,7 @@
   {#if cursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=null}>First records</Button>{/if}{#if history.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>cursor=history.value?.nextCursor??null}>More records</Button>{/if}
 </Card>
 {/if}
-{#if modal}<Modal title={modal==='valuation'?'Manual valuation':modal==='trade'?'Record trade':modal==='remove'?'Delete record':'Delete asset'} close={()=>modal=null}><form class="space-y-3" onsubmit={record}>
+{#if modal}<Modal title={modal==='valuation'?'Manual valuation':modal==='trade'?'Record trade':modal==='remove'?'Delete record':'Delete asset'} close={()=>modal=null}><form id={modalForm + '-asset-record'} class="space-y-3" onsubmit={record}>
   {#if modal==='valuation'||modal==='trade'}
     <Label class="field">Date<Input type="date" bind:value={date} required/></Label>
     {#if modal==='trade'}
@@ -133,5 +134,9 @@
       <Label class="field">Linked transaction ID (optional)<Input bind:value={link}/></Label>
     {:else}<MoneyField label="Market value" bind:value={amount}/>{/if}
   {:else}<p>{modal==='remove'?'Delete this history record?':'Delete this asset and its history?'}</p>{/if}
-  <Feedback error={task.error}/><Button variant="outline" type="submit" class={modal==='remove'||modal==='deleteAsset'?'danger':'primary'} disabled={task.busy}>{modal==='remove'||modal==='deleteAsset'?'Delete':'Save'}</Button>
-</form></Modal>{/if}
+  <Feedback error={task.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="outline" type="submit" form={modalForm + '-asset-record'} class={modal==='remove'||modal==='deleteAsset'?'danger':'primary'} disabled={task.busy}>{modal==='remove'||modal==='deleteAsset'?'Delete':'Save'}</Button>
+  {/snippet}
+</Modal>{/if}

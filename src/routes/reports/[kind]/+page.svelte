@@ -72,12 +72,12 @@
     <Table contained={false}><TableHeader><TableRow><TableHead>Period</TableHead>{#if kind.kind==='incomeVsExpense'||kind.kind==='categoryTrends'}<TableHead>Income</TableHead><TableHead>Expense</TableHead>{:else if kind.kind==='cashFlow'}<TableHead>Recorded</TableHead><TableHead>Expected</TableHead>{:else}<TableHead>Net worth</TableHead>{/if}</TableRow></TableHeader>
     <TableBody>
       {#each report.value.points as point (point.date)}
-        <TableRow><TableCell><a href={drill(point.date,categoryId,kind.kind==='cashFlow'?'bank':'reporting')} class="underline">{privacy.date(point.date)}</a></TableCell>
-          {#if kind.kind==='incomeVsExpense'||kind.kind==='categoryTrends'}<TableCell class="numeric"><a href={drill(point.date,categoryId,'reporting','credit')} aria-label="View income transactions">{privacy.money(point.income?.reliable)}</a></TableCell><TableCell class="numeric"><a href={drill(point.date,categoryId,'reporting','debit')} aria-label="View expense transactions">{privacy.money(point.expense?.reliable)}</a></TableCell>
-          {:else if kind.kind==='cashFlow'}<TableCell class="numeric">{privacy.money(point.booked?.reliable)}</TableCell><TableCell class="numeric"><a href={drill(point.date,categoryId,'effective')} aria-label="View forecast transactions">{privacy.money(point.forecast?.reliable)}</a></TableCell>{:else}<TableCell class="numeric">{privacy.money(point.netWorth?.reliable)}</TableCell>{/if}
+        <TableRow><TableCell><a href={drill(point.date,categoryId,kind.kind==='cashFlow'?'bank':'reporting')} class="mobile-touch-link underline">{privacy.date(point.date)}</a></TableCell>
+          {#if kind.kind==='incomeVsExpense'||kind.kind==='categoryTrends'}<TableCell class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'reporting','credit')} aria-label="View income transactions">{privacy.money(point.income?.reliable)}</a></TableCell><TableCell class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'reporting','debit')} aria-label="View expense transactions">{privacy.money(point.expense?.reliable)}</a></TableCell>
+          {:else if kind.kind==='cashFlow'}<TableCell class="numeric">{privacy.money(point.booked?.reliable)}</TableCell><TableCell class="numeric"><a class="mobile-touch-link" href={drill(point.date,categoryId,'effective')} aria-label="View forecast transactions">{privacy.money(point.forecast?.reliable)}</a></TableCell>{:else}<TableCell class="numeric">{privacy.money(point.netWorth?.reliable)}</TableCell>{/if}
         </TableRow>
         {#each point.categories as category,index (index)}
-          <TableRow class="bg-ground"><TableCell colspan={2}><a href={drill(point.date,category.categoryId)} class="underline">{categories.value?.rows.find(item=>item.id===category.categoryId)?.draft.name ?? 'Uncategorized'}</a></TableCell><TableCell class="numeric" colspan={2}>{privacy.money(category.amount.reliable)}</TableCell></TableRow>
+          <TableRow class="bg-ground"><TableCell colspan={2}><a href={drill(point.date,category.categoryId)} class="mobile-touch-link underline">{categories.value?.rows.find(item=>item.id===category.categoryId)?.draft.name ?? 'Uncategorized'}</a></TableCell><TableCell class="numeric" colspan={2}>{privacy.money(category.amount.reliable)}</TableCell></TableRow>
         {/each}
       {/each}
     </TableBody></Table>
@@ -90,7 +90,7 @@
     <ul class="mt-2 divide-y divide-line">
       {#each report.value.separatePostings as item (item.id)}
         <li class="flex flex-wrap items-center gap-3 py-2 text-sm">
-          <a class="mr-auto underline" href={'/transactions/' + item.id}>{item.label}</a><span>{privacy.date(item.date)}</span><span class="numeric">{privacy.money(item.amount)}</span>
+          <a class="mobile-touch-link mr-auto underline" href={'/transactions/' + item.id}>{item.label}</a><span>{privacy.date(item.date)}</span><span class="numeric">{privacy.money(item.amount)}</span>
         </li>
       {/each}
     </ul>

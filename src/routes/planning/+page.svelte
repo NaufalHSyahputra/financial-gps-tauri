@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Button } from '#lib/components/ui/button/index.js';
   import { Card } from '#lib/components/ui/card/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
@@ -159,7 +160,7 @@
                 uncertainIds = event.currentTarget.checked ? [...uncertainIds, entry.id] : uncertainIds.filter(id => id !== entry.id);
               }} /> Include in scenario</Label>
             {/if}
-            {#if entry.transactionId && entry.source === 'manual'}<a class="mt-1 inline-block text-sm underline" href={'/transactions/' + entry.transactionId}>Linked transaction</a>{/if}
+            {#if entry.transactionId && entry.source === 'manual'}<a class="mobile-touch-link mt-1 inline-block text-sm underline" href={'/transactions/' + entry.transactionId}>Linked transaction</a>{/if}
           </li>
         {:else}
           <li class="py-3 text-sm text-muted-foreground">No upcoming entries.</li>
@@ -171,7 +172,7 @@
 
 {#if editing}
   <Modal title={deleting ? 'Remove plan entry' : selected ? 'Edit plan entry' : 'Add to cash plan'} close={() => editing = false} confirm={deleting}>
-    <form class="space-y-3" onsubmit={submit}>
+    <form id={modalForm + '-plan'} class="space-y-3" onsubmit={submit}>
       {#if deleting}
         <p>Remove “{selected?.name}” from the plan?</p>
       {:else}
@@ -192,14 +193,16 @@
         <Feedback error={candidates.error} />
       {/if}
       <Feedback error={task.error} />
-      <Button type="submit" disabled={task.busy}>{deleting ? 'Remove entry' : 'Save entry'}</Button>
     </form>
+    {#snippet footer()}
+      <Button type="submit" form={modalForm + '-plan'} disabled={task.busy}>{deleting ? 'Remove entry' : 'Save entry'}</Button>
+    {/snippet}
   </Modal>
 {/if}
 
 {#if stageEditor}
   <Modal title="Recurring amounts" close={() => stageEditor = false}>
-    <form class="space-y-3" onsubmit={saveStages}>
+    <form id={modalForm + '-stages'} class="space-y-3" onsubmit={saveStages}>
       <Label class="field">Recurring expense
         <NativeSelect value={stageRule} onchange={(event) => openStages(event.currentTarget.value)} required>
           <option value="">Choose a recurring expense</option>
@@ -219,10 +222,13 @@
         {/each}
         <div class="flex flex-wrap gap-2">
           <Button type="button" variant="outline" onclick={() => stageRows = [...stageRows, { id: crypto.randomUUID(), startsOn: '', endsOn: '', amount: '' }]}>Add date range</Button>
-          <Button type="submit" disabled={task.busy}>Save amounts</Button>
+
         </div>
       {/if}
       <Feedback error={task.error} />
     </form>
+    {#snippet footer()}
+      {#if stageRule}<Button type="submit" form={modalForm + '-stages'} disabled={task.busy}>Save amounts</Button>{/if}
+    {/snippet}
   </Modal>
 {/if}

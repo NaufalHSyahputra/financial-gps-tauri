@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { goto } from '$app/navigation';
   import RowActions from '#lib/components/RowActions.svelte';
   import { Button } from '#lib/components/ui/button/index.js';
@@ -95,7 +96,7 @@
   {#if occurrenceCursor}<Button variant="outline" class="mt-3" onclick={()=>occurrenceCursor=null}>First page</Button>{/if}
   {#if occurrences.value?.nextCursor}<Button variant="outline" class="mt-3" onclick={()=>occurrenceCursor=occurrences.value?.nextCursor??null}>Next occurrences</Button>{/if}
 </Card>{/if}
-{#if edit}<Modal title={edited?'Edit schedule':'New schedule'} close={()=>edit=false}><form class="space-y-3" onsubmit={save}>
+{#if edit}<Modal title={edited?'Edit schedule':'New schedule'} close={()=>edit=false}><form id={modalForm + '-schedule'} class="space-y-3" onsubmit={save}>
   <Label class="field">Description<Input bind:value={draft.description} required/></Label>
   <div class="form-grid"><Label class="field">Account<NativeSelect bind:value={draft.accountId} required><option value="">Select account</option>{#each accounts.value??[] as row (row.id)}<option value={row.id}>{row.account.name} · {row.account.currencyCode}</option>{/each}</NativeSelect></Label><MoneyField bind:value={amount}/></div>
   <div class="form-grid"><Label class="field">Direction<NativeSelect bind:value={draft.direction}><option value="debit">Money out</option><option value="credit">Money in</option></NativeSelect></Label>
@@ -115,7 +116,21 @@
   <Label class="field">Notes<Textarea bind:value={draft.notes}></Textarea></Label>
   <div class="flex flex-wrap gap-4"><Label class="check"><NativeCheckbox  bind:checked={draft.active}/> Active</Label><Label class="check"><NativeCheckbox  bind:checked={draft.skipFirst}/> Skip first</Label><Label class="check"><NativeCheckbox  bind:checked={draft.autoGenerate}/> Generate automatically</Label></div>
   {#if edited?.generationFloor}<p class="text-sm text-muted-foreground">Generated through {privacy.date(edited.generationFloor)}.</p>{/if}
-  <Feedback error={task.error || categories.error || payees.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save schedule</Button>
-</form></Modal>{/if}
-{#if action}<Modal title={'Occurrence · '+action.kind} close={()=>action=undefined}><form class="space-y-3" onsubmit={apply}><p>{privacy.date(action.row.scheduledDate)}</p>{#if action.kind==='match'}<Label class="field">Transaction ID<Input bind:value={matchId} required/></Label>{/if}<Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Confirm {action.kind}</Button></form></Modal>{/if}
-{#if archive}<Modal title="Archive schedule" close={()=>archive=undefined}><p>Archive {archive.draft.description}?</p><Feedback error={task.error}/><Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{if(!archive)return;await session.call(commands.recurringArchive(session.mutation(),{id:archive.id}));archive=undefined;list.refresh();occurrences.refresh();})}>Archive schedule</Button></Modal>{/if}
+  <Feedback error={task.error || categories.error || payees.error}/>
+</form>
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-schedule'}  disabled={task.busy}>Save schedule</Button>
+  {/snippet}
+</Modal>{/if}
+{#if action}<Modal title={'Occurrence · '+action.kind} close={()=>action=undefined}><form id={modalForm + '-occurrence'} class="space-y-3" onsubmit={apply}><p>{privacy.date(action.row.scheduledDate)}</p>{#if action.kind==='match'}<Label class="field">Transaction ID<Input bind:value={matchId} required/></Label>{/if}<Feedback error={task.error}/></form>
+
+  {#snippet footer()}
+    <Button variant="default" type="submit" form={modalForm + '-occurrence'}  disabled={task.busy}>Confirm {action?.kind}</Button>
+  {/snippet}
+</Modal>{/if}
+{#if archive}<Modal title="Archive schedule" close={()=>archive=undefined}><p>Archive {archive.draft.description}?</p><Feedback error={task.error}/>
+
+  {#snippet footer()}
+    <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{if(!archive)return;await session.call(commands.recurringArchive(session.mutation(),{id:archive.id}));archive=undefined;list.refresh();occurrences.refresh();})}>Archive schedule</Button>
+  {/snippet}
+</Modal>{/if}

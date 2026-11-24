@@ -1,4 +1,5 @@
 <script lang="ts">
+  const modalForm = $props.id();
   import { Card } from '#lib/components/ui/card/index.js';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Label } from '#lib/components/ui/label/index.js';
@@ -174,25 +175,16 @@
   <Modal title={dialog === 'enroll' ? 'Switch to Cloud Sync' : dialog === 'local' ? 'Switch to Local Only'
       : dialog === 'rotate' ? 'Update Turso credentials' : 'Resolve sync conflict'} {close}>
     {#if dialog === 'enroll' || dialog === 'rotate'}
-      <form autocomplete="off" onsubmit={event => { event.preventDefault(); switchMode('turso-sync'); }}>
+      <form id={modalForm + '-sync'} autocomplete="off" onsubmit={event => { event.preventDefault(); switchMode('turso-sync'); }}>
         <fieldset disabled={busy} class="grid gap-3">
           <p class="text-sm text-muted-foreground">{dialog === 'enroll'
             ? 'Confirm enrollment to sync this activity through your Turso database on Desktop, Mobile, and Web.'
             : 'Enter a new token for the enrolled database. Saving replaces the token on this device.'}</p>
           <TursoCredentials bind:url bind:token lockedUrl={dialog === 'rotate'} onEdit={() => { error = note = ''; }} />
-          <div class="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" type="button" onclick={close}>Cancel</Button>
-            <Button variant="outline" type="button" disabled={!url.trim() || !token} onclick={verify}>Test Connection</Button>
-            <Button variant="default"  type="submit">{dialog === 'enroll' ? 'Confirm Cloud Sync' : 'Save new token'}</Button>
-          </div>
         </fieldset>
       </form>
     {:else if dialog === 'local'}
       <p class="mb-4 text-sm text-muted-foreground">This device will retain its current activity and remove its saved Turso token. Existing copies on Turso and other devices will remain there.</p>
-      <div class="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" type="button" disabled={busy} onclick={close}>Cancel</Button>
-        <Button variant="default" type="button"  disabled={busy} onclick={() => switchMode('local-isolated')}>Confirm Local Only</Button>
-      </div>
     {:else if selection}
       <dl class="mb-4 grid grid-cols-2 gap-3 text-sm">
         <div><dt class="text-muted-foreground">Local edit version</dt><dd class="font-mono">{selection.localVersion}</dd></div>
@@ -205,14 +197,23 @@
       </form>
       <p class="mb-3 text-sm text-muted-foreground">Keeping local publishes this device’s version as a new generation. Accepting remote replaces the pending edits on this device.</p>
       <Label class="check mb-4"><NativeCheckbox  bind:checked={replacementConfirmed} disabled={busy}/> I understand that accepting remote replaces my pending local edits.</Label>
-      <div class="flex flex-wrap justify-end gap-2">
-        <Button variant="outline" type="button" disabled={busy} onclick={close}>Cancel</Button>
-        <Button variant="outline" type="button" disabled={busy} onclick={() => resolve('local')}>Keep Local Version</Button>
-        <Button variant="destructive" type="button"  disabled={busy || !replacementConfirmed} onclick={() => resolve('remote')}>Accept Remote Version</Button>
-      </div>
     {/if}
     {#if busy}<p class="mt-3 text-sm text-muted-foreground" role="status">Working…</p>{/if}
     {#if note}<p class="mt-3 text-sm text-status" role="status">{note}</p>{/if}
     {#if error}<p class="error mt-3 text-sm" role="alert">{error}</p>{/if}
+    {#snippet footer()}
+      <div class="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" type="button" disabled={busy} onclick={close}>Cancel</Button>
+        {#if dialog === 'enroll' || dialog === 'rotate'}
+          <Button variant="outline" type="button" disabled={busy || !url.trim() || !token} onclick={verify}>Test Connection</Button>
+          <Button type="submit" form={modalForm + '-sync'} disabled={busy}>{dialog === 'enroll' ? 'Confirm Cloud Sync' : 'Save new token'}</Button>
+        {:else if dialog === 'local'}
+          <Button type="button" disabled={busy} onclick={() => switchMode('local-isolated')}>Confirm Local Only</Button>
+        {:else if selection}
+          <Button variant="outline" type="button" disabled={busy} onclick={() => resolve('local')}>Keep Local Version</Button>
+          <Button variant="destructive" type="button" disabled={busy || !replacementConfirmed} onclick={() => resolve('remote')}>Accept Remote Version</Button>
+        {/if}
+      </div>
+    {/snippet}
   </Modal>
 {/if}

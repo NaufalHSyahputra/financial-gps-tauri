@@ -1,4 +1,5 @@
 <script lang="ts">
+  import XIcon from '@lucide/svelte/icons/x';
   import { MediaQuery } from 'svelte/reactivity';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
@@ -89,10 +90,10 @@
       {/snippet}
     </Drawer.Trigger>
     <Drawer.Content class="z-[60]">
-      <Drawer.Header class="flex shrink-0 items-center justify-between border-b px-4 py-1 text-left">
+      <Drawer.Header class="flex shrink-0 flex-row items-center justify-between gap-2 border-b border-border px-4 py-2 !text-left">
         <Drawer.Title>Choose category icon</Drawer.Title>
         <Drawer.Close>
-          {#snippet child({ props })}<Button {...props} type="button" variant="ghost" aria-label="Close icon picker">×</Button>{/snippet}
+          {#snippet child({ props })}<Button {...props} type="button" variant="ghost" size="icon" class="shrink-0 max-md:size-11" aria-label="Close icon picker"><XIcon class="size-4" aria-hidden /></Button>{/snippet}
         </Drawer.Close>
       </Drawer.Header>
       {@render picker()}

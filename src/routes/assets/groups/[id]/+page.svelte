@@ -59,4 +59,9 @@
   </fieldset>
   <div class="flex gap-2"><Button variant="default" type="submit"  disabled={task.busy}>Save group</Button>{#if data.value}<Button variant="outline" type="button" onclick={()=>remove=true}>Delete group</Button>{/if}</div>
 </Card>{/if}
-{#if remove}<Modal confirm title="Delete asset group" close={()=>remove=false}><p>Delete this group?</p><Feedback error={task.error}/><Button variant="destructive" class="mt-3" disabled={task.busy} onclick={()=>void task.run(async()=>{await session.call(commands.assetGroupDelete(session.mutation(),{id,confirm:true}));await goto('/assets');})}>Delete group</Button></Modal>{/if}
+{#if remove}<Modal confirm title="Delete asset group" close={()=>remove=false}><p>Delete this group?</p><Feedback error={task.error}/>
+
+  {#snippet footer()}
+    <Button variant="destructive" disabled={task.busy} onclick={()=>void task.run(async()=>{await session.call(commands.assetGroupDelete(session.mutation(),{id,confirm:true}));await goto('/assets');})}>Delete group</Button>
+  {/snippet}
+</Modal>{/if}
