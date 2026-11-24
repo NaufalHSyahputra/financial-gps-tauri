@@ -15,6 +15,7 @@
   const feature = $derived(path.split('/')[1]);
   const plan = [
     { label: 'Budgets', href: '/budgets' },
+    { label: 'Cash plan', href: '/planning' },
     { label: 'Goals', href: '/goals' },
     { label: 'Recurring', href: '/recurring' },
     { label: 'Loans', href: '/accounts#loans' },
@@ -22,7 +23,7 @@
   ];
   const onLoans = $derived(path === '/accounts' && page.url.hash === '#loans');
   const planning = $derived(onLoans || plan.some(item => item.href === path));
-  const planHome = $derived(plan.find(item => privacy.visible(item.href.split(/[\/#]/)[1]))?.href ?? '/accounts#loans');
+  const planHome = $derived(plan.find(item => item.href !== '/planning' && privacy.visible(item.href.split(/[\/#]/)[1]))?.href ?? '/accounts#loans');
   const title = $derived(
     path === '/accounts/new' ? 'New account'
     : feature === 'reports' ? reports.find(item => path === '/reports/' + item.path)?.label ?? 'Reports'

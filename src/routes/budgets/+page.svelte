@@ -20,6 +20,10 @@
   import CurrencySelect from '../../lib/components/CurrencySelect.svelte';
   import { minorToInput } from '../../lib/money';
 
+  import CycleBudgets from '#lib/views/CycleBudgets.svelte';
+  const calendar = query(() => { session.financialDateTick; return session.call(commands.financialCalendarGet(session.scope)); });
+  let selection = $state<'cycle' | 'monthly'>();
+  const view = $derived(selection ?? (calendar.value ? 'cycle' : 'monthly'));
   let month = $state(today().slice(0,7));
   let mode = $state<'edit'|'copy'|'suggest'|'delete'|null>(null);
   let categoryId = $state('');
@@ -30,7 +34,7 @@
   let overwrite = $state(false);
   let months = $state(3);
   let suggestions = $state<Suggestion[]>([]);
-  const planner = query(()=>session.call(commands.budgetsGet(session.scope,{month})));
+  const planner = query(() => !calendar.loading && view === 'monthly' ? session.call(commands.budgetsGet(session.scope,{month})) : Promise.resolve(null));
   const categories = query(()=>session.call(commands.categoriesList(session.scope,{page:pageRequest(null,200)})));
   const task = createTask();
   let currency = $state('USD');
@@ -58,12 +62,22 @@
     return Number(ratio<0n?0n:ratio>100n?100n:ratio);
   }
 </script>
-<Heading title="Budgets" subtitle="Plan spending against actual and projected expenses.">
+<Heading title="Budgets" />
+<div class="mb-4 flex flex-wrap gap-2" role="group" aria-label="Budget period">
+  <Button variant={view === 'cycle' ? 'default' : 'outline'} aria-pressed={view === 'cycle'} onclick={() => selection = 'cycle'}>Payday cycle</Button>
+  <Button variant={view === 'monthly' ? 'default' : 'outline'} aria-pressed={view === 'monthly'} onclick={() => selection = 'monthly'}>Monthly</Button>
+</div>
+<Feedback error={calendar.error} loading={calendar.loading} />
+{#if !calendar.loading}
+  {#if view === 'cycle'}
+    <CycleBudgets />
+  {:else}
+<div class="mb-4 flex flex-wrap items-end gap-2">
   <Label class="field">Month<Input type="month" bind:value={month} required/></Label>
   <Button variant="outline" onclick={()=>{sourceMonth='';adjustment='0';overwrite=false;mode='copy';}}>Copy month</Button>
   <Button variant="outline" onclick={()=>{suggestions=[];mode='suggest';}}>Historical suggestions</Button>
   <Button variant="default"  onclick={()=>edit()}>Set limit</Button>
-</Heading>
+</div>
 <Feedback error={planner.error || categories.error} loading={planner.loading}/>
 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
   {#each planner.value?.rows??[] as row (row.categoryId)}
@@ -113,4 +127,6 @@
     <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>{mode==='suggest'?'Calculate suggestions':mode==='delete'?'Remove limit':'Save'}</Button>
   </form>
 </Modal>
+{/if}
+  {/if}
 {/if}

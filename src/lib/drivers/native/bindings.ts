@@ -134,6 +134,15 @@ export const commands = {
 	budgetsSave: (mutation: Mutation_Deserialize, input: BudgetsSave_Deserialize, options?: InvokeOptions) => typedError<Write<BudgetView_Serialize>, AppError_Serialize>(__TAURI_INVOKE("budgets_save", { mutation, input }, options)),
 	budgetsDelete: (mutation: Mutation_Deserialize, input: BudgetsDelete_Deserialize, options?: InvokeOptions) => typedError<Write<BudgetView_Serialize>, AppError_Serialize>(__TAURI_INVOKE("budgets_delete", { mutation, input }, options)),
 	budgetsCopy: (mutation: Mutation_Deserialize, input: BudgetsCopy, options?: InvokeOptions) => typedError<Write<BudgetView_Serialize>, AppError_Serialize>(__TAURI_INVOKE("budgets_copy", { mutation, input }, options)),
+	financialCalendarGet: (scope: Scope, options?: InvokeOptions) => typedError<FinancialCalendarView_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("financial_calendar_get", { scope }, options)),
+	financialCalendarSave: (mutation: Mutation_Deserialize, input: CalendarInput, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("financial_calendar_save", { mutation, input }, options)),
+	budgetCycleGet: (scope: Scope, input: CycleBudgetQuery_Deserialize, options?: InvokeOptions) => typedError<CycleBudgetView_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("budget_cycle_get", { scope, input }, options)),
+	budgetCycleEdit: (mutation: Mutation_Deserialize, input: CycleBudgetEdit_Deserialize, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("budget_cycle_edit", { mutation, input }, options)),
+	cashPlanGet: (scope: Scope, input: CashPlanQuery_Deserialize, options?: InvokeOptions) => typedError<CashPlanView_Serialize | null, AppError_Serialize>(__TAURI_INVOKE("cash_plan_get", { scope, input }, options)),
+	cashPlanEdit: (mutation: Mutation_Deserialize, input: CashPlanEdit_Deserialize, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("cash_plan_edit", { mutation, input }, options)),
+	postingCorrectionPreview: (scope: Scope, input: CorrectionRequest_Deserialize, options?: InvokeOptions) => typedError<CorrectionPreview_Serialize, AppError_Serialize>(__TAURI_INVOKE("posting_correction_preview", { scope, input }, options)),
+	postingCorrectionApply: (mutation: Mutation_Deserialize, input: CorrectionConfirm_Deserialize, options?: InvokeOptions) => typedError<Write<Deleted>, AppError_Serialize>(__TAURI_INVOKE("posting_correction_apply", { mutation, input }, options)),
+	postingAuditList: (scope: Scope, input: Id, options?: InvokeOptions) => typedError<PostingAuditItem_Serialize[], AppError_Serialize>(__TAURI_INVOKE("posting_audit_list", { scope, input }, options)),
 	budgetSuggestions: (scope: Scope, input: BudgetSuggestions_Deserialize, options?: InvokeOptions) => typedError<Suggestion[], AppError_Serialize>(__TAURI_INVOKE("budget_suggestions", { scope, input }, options)),
 	goalsList: (scope: Scope, input: GoalList_Deserialize, options?: InvokeOptions) => typedError<GoalPage_Serialize, AppError_Serialize>(__TAURI_INVOKE("goals_list", { scope, input }, options)),
 	goalGet: (scope: Scope, input: AssetQuery_Deserialize, options?: InvokeOptions) => typedError<Goal_Serialize, AppError_Serialize>(__TAURI_INVOKE("goal_get", { scope, input }, options)),
@@ -781,6 +790,8 @@ export type BudgetMonth = {
 	month: string,
 };
 
+export type BudgetPace = "onTrack" | "aheadOfPlan";
+
 export type BudgetSuggestions = BudgetSuggestions_Serialize | BudgetSuggestions_Deserialize;
 
 export type BudgetSuggestions_Deserialize = {
@@ -935,6 +946,14 @@ export type CalendarEvent_Serialize = {
 	occurrence: Occurrence_Serialize | null,
 };
 
+export type CalendarInput = {
+	timezone: string,
+	anchor: number,
+	weekdayPolicy: CalendarPolicy,
+};
+
+export type CalendarPolicy = "none" | "previousWorkingDay" | "nextWorkingDay";
+
 export type CalendarQuery = CalendarQuery_Serialize | CalendarQuery_Deserialize;
 
 export type CalendarQuery_Deserialize = {
@@ -1007,6 +1026,162 @@ export type CardLineDraft = {
 	name: string,
 	currencyCode: string,
 	limitMinor: string,
+};
+
+export type CashPlanDay = CashPlanDay_Serialize | CashPlanDay_Deserialize;
+
+export type CashPlanDay_Deserialize = {
+	date: string,
+	obligations: Money,
+	expectedIncome: Money,
+	scenarioIncome: Money,
+	cashOnlyEnd: Money,
+	expectedEnd: Money,
+	scenarioEnd: Money,
+	cashOnlyGap: Money,
+	expectedGap: Money,
+	scenarioGap: Money,
+	dependsOnExpectedIncome: boolean,
+	entries: CashPlanEntry_Deserialize[],
+};
+
+export type CashPlanDay_Serialize = {
+	date: string,
+	obligations: Money,
+	expectedIncome: Money,
+	scenarioIncome: Money,
+	cashOnlyEnd: Money,
+	expectedEnd: Money,
+	scenarioEnd: Money,
+	cashOnlyGap: Money,
+	expectedGap: Money,
+	scenarioGap: Money,
+	dependsOnExpectedIncome: boolean,
+	entries: CashPlanEntry_Serialize[],
+};
+
+export type CashPlanDraft = CashPlanDraft_Serialize | CashPlanDraft_Deserialize;
+
+export type CashPlanDraft_Deserialize = {
+	id?: string | null,
+	name: string,
+	dueOn: string,
+	minor: string,
+	kind: CashPlanKind,
+	transactionId?: string | null,
+};
+
+export type CashPlanDraft_Serialize = {
+	id: string | null,
+	name: string,
+	dueOn: string,
+	minor: string,
+	kind: CashPlanKind,
+	transactionId: string | null,
+};
+
+export type CashPlanEdit = CashPlanEdit_Serialize | CashPlanEdit_Deserialize;
+
+export type CashPlanEdit_Deserialize = ({ save: CashPlanDraft_Deserialize }) & { delete?: never; setStages?: never } | ({ delete: {
+	id: string,
+} }) & { save?: never; setStages?: never } | ({ setStages: CashPlanStages_Deserialize }) & { delete?: never; save?: never };
+
+export type CashPlanEdit_Serialize = ({ save: CashPlanDraft_Serialize }) & { delete?: never; setStages?: never } | ({ delete: {
+	id: string,
+} }) & { save?: never; setStages?: never } | ({ setStages: CashPlanStages_Serialize }) & { delete?: never; save?: never };
+
+export type CashPlanEntry = CashPlanEntry_Serialize | CashPlanEntry_Deserialize;
+
+export type CashPlanEntry_Deserialize = {
+	id: string,
+	name: string,
+	dueOn: string,
+	amount: Money,
+	remaining: Money,
+	kind: CashPlanKind,
+	source: CashPlanSource,
+	state: CashPlanState,
+	transactionId?: string | null,
+	ruleId?: string | null,
+};
+
+export type CashPlanEntry_Serialize = {
+	id: string,
+	name: string,
+	dueOn: string,
+	amount: Money,
+	remaining: Money,
+	kind: CashPlanKind,
+	source: CashPlanSource,
+	state: CashPlanState,
+	transactionId: string | null,
+	ruleId: string | null,
+};
+
+export type CashPlanKind = "obligation" | "stableIncome" | "uncertainIncome";
+
+export type CashPlanQuery = CashPlanQuery_Serialize | CashPlanQuery_Deserialize;
+
+export type CashPlanQuery_Deserialize = {
+	through?: string | null,
+	uncertainIds: string[],
+};
+
+export type CashPlanQuery_Serialize = {
+	through: string | null,
+	uncertainIds: string[],
+};
+
+export type CashPlanSource = "manual" | "recurring" | "cardStatement" | "loan";
+
+export type CashPlanStage = CashPlanStage_Serialize | CashPlanStage_Deserialize;
+
+export type CashPlanStage_Deserialize = {
+	startsOn: string,
+	endsOn?: string | null,
+	minor: string,
+};
+
+export type CashPlanStage_Serialize = {
+	startsOn: string,
+	endsOn: string | null,
+	minor: string,
+};
+
+export type CashPlanStages = CashPlanStages_Serialize | CashPlanStages_Deserialize;
+
+export type CashPlanStages_Deserialize = {
+	ruleId: string,
+	stages: CashPlanStage_Deserialize[],
+};
+
+export type CashPlanStages_Serialize = {
+	ruleId: string,
+	stages: CashPlanStage_Serialize[],
+};
+
+export type CashPlanState = "upcoming" | "overdue" | "received" | "missed" | "settled";
+
+export type CashPlanView = CashPlanView_Serialize | CashPlanView_Deserialize;
+
+export type CashPlanView_Deserialize = {
+	today: string,
+	through: string,
+	cashStart: Money,
+	days: CashPlanDay_Deserialize[],
+	entries: CashPlanEntry_Deserialize[],
+	excludedForeignAccounts: string,
+	stages: CashPlanStages_Deserialize[],
+};
+
+export type CashPlanView_Serialize = {
+	today: string,
+	through: string,
+	cashStart: Money,
+	days: CashPlanDay_Serialize[],
+	entries: CashPlanEntry_Serialize[],
+	excludedForeignAccounts: string,
+	stages: CashPlanStages_Serialize[],
 };
 
 export type CatalogQuery = CatalogQuery_Serialize | CatalogQuery_Deserialize;
@@ -1221,6 +1396,76 @@ export type Conversion_Serialize = {
 	legs: FxLeg[],
 };
 
+export type CorrectionAction = CorrectionAction_Serialize | CorrectionAction_Deserialize;
+
+export type CorrectionAction_Deserialize = ({ void: {
+	target: VersionedId,
+} }) & { correct?: never; opening?: never; refund?: never } | ({ correct: {
+	target: VersionedId,
+	draft: TxDraft_Deserialize,
+} }) & { opening?: never; refund?: never; void?: never } | ({ opening: {
+	accountId: string,
+	amount: Money,
+	date: string,
+} }) & { correct?: never; refund?: never; void?: never } | ({ refund: {
+	target: VersionedId,
+	originalId?: string | null,
+} }) & { correct?: never; opening?: never; void?: never };
+
+export type CorrectionAction_Serialize = ({ void: {
+	target: VersionedId,
+} }) & { correct?: never; opening?: never; refund?: never } | ({ correct: {
+	target: VersionedId,
+	draft: TxDraft_Serialize,
+} }) & { opening?: never; refund?: never; void?: never } | ({ opening: {
+	accountId: string,
+	amount: Money,
+	date: string,
+} }) & { correct?: never; refund?: never; void?: never } | ({ refund: {
+	target: VersionedId,
+	originalId: string | null,
+} }) & { correct?: never; opening?: never; void?: never };
+
+export type CorrectionConfirm = CorrectionConfirm_Serialize | CorrectionConfirm_Deserialize;
+
+export type CorrectionConfirm_Deserialize = {
+	request: CorrectionRequest_Deserialize,
+	token: string,
+};
+
+export type CorrectionConfirm_Serialize = {
+	request: CorrectionRequest_Serialize,
+	token: string,
+};
+
+export type CorrectionPreview = CorrectionPreview_Serialize | CorrectionPreview_Deserialize;
+
+export type CorrectionPreview_Deserialize = {
+	revision: string,
+	token: string,
+	before?: TxDetail_Deserialize | null,
+	proposed?: TxDraft_Deserialize | null,
+};
+
+export type CorrectionPreview_Serialize = {
+	revision: string,
+	token: string,
+	before: TxDetail_Serialize | null,
+	proposed: TxDraft_Serialize | null,
+};
+
+export type CorrectionRequest = CorrectionRequest_Serialize | CorrectionRequest_Deserialize;
+
+export type CorrectionRequest_Deserialize = {
+	action: CorrectionAction_Deserialize,
+	reason: string,
+};
+
+export type CorrectionRequest_Serialize = {
+	action: CorrectionAction_Serialize,
+	reason: string,
+};
+
 export type CreateRequest = CreateRequest_Serialize | CreateRequest_Deserialize;
 
 export type CreateRequest_Deserialize = {
@@ -1310,6 +1555,94 @@ export type Currency = {
 export type CurrencyPair = {
 	baseCode: string,
 	quoteCode: string,
+};
+
+export type CycleBudgetChange = CycleBudgetChange_Serialize | CycleBudgetChange_Deserialize;
+
+export type CycleBudgetChange_Deserialize = ({ save: CycleBudgetDraft_Deserialize }) & { delete?: never } | ({ delete: {
+	id: string,
+} }) & { save?: never } | "copyPrevious";
+
+export type CycleBudgetChange_Serialize = ({ save: CycleBudgetDraft_Serialize }) & { delete?: never } | ({ delete: {
+	id: string,
+} }) & { save?: never } | "copyPrevious";
+
+export type CycleBudgetDraft = CycleBudgetDraft_Serialize | CycleBudgetDraft_Deserialize;
+
+export type CycleBudgetDraft_Deserialize = {
+	id?: string | null,
+	name: string,
+	limitMinor: string,
+	categoryIds: string[],
+};
+
+export type CycleBudgetDraft_Serialize = {
+	id: string | null,
+	name: string,
+	limitMinor: string,
+	categoryIds: string[],
+};
+
+export type CycleBudgetEdit = CycleBudgetEdit_Serialize | CycleBudgetEdit_Deserialize;
+
+export type CycleBudgetEdit_Deserialize = {
+	start: string,
+	change: CycleBudgetChange_Deserialize,
+};
+
+export type CycleBudgetEdit_Serialize = {
+	start: string,
+	change: CycleBudgetChange_Serialize,
+};
+
+export type CycleBudgetQuery = CycleBudgetQuery_Serialize | CycleBudgetQuery_Deserialize;
+
+export type CycleBudgetQuery_Deserialize = {
+	start?: string | null,
+};
+
+export type CycleBudgetQuery_Serialize = {
+	start: string | null,
+};
+
+export type CycleBudgetRow = CycleBudgetRow_Serialize | CycleBudgetRow_Deserialize;
+
+export type CycleBudgetRow_Deserialize = {
+	id: string,
+	name: string,
+	categoryIds: string[],
+	limit: Money,
+	spent: Money,
+	remaining: Money,
+	runRate?: Money | null,
+	status: LimitStatus,
+	pace?: BudgetPace | null,
+};
+
+export type CycleBudgetRow_Serialize = {
+	id: string,
+	name: string,
+	categoryIds: string[],
+	limit: Money,
+	spent: Money,
+	remaining: Money,
+	runRate: Money | null,
+	status: LimitStatus,
+	pace: BudgetPace | null,
+};
+
+export type CycleBudgetView = CycleBudgetView_Serialize | CycleBudgetView_Deserialize;
+
+export type CycleBudgetView_Deserialize = {
+	cycle: FinancialCycle,
+	rows: CycleBudgetRow_Deserialize[],
+	excludedForeign: string,
+};
+
+export type CycleBudgetView_Serialize = {
+	cycle: FinancialCycle,
+	rows: CycleBudgetRow_Serialize[],
+	excludedForeign: string,
 };
 
 export type DashboardQuery = DashboardQuery_Serialize | DashboardQuery_Deserialize;
@@ -1463,6 +1796,35 @@ export type FileResult = {
 	rowCount: string,
 	revision: string,
 };
+
+export type FinancialCalendarView = FinancialCalendarView_Serialize | FinancialCalendarView_Deserialize;
+
+export type FinancialCalendarView_Deserialize = {
+	settings: CalendarInput,
+	today: string,
+	historyFloor: string,
+	current: FinancialCycle,
+	pending?: PendingCalendar | null,
+};
+
+export type FinancialCalendarView_Serialize = {
+	settings: CalendarInput,
+	today: string,
+	historyFloor: string,
+	current: FinancialCycle,
+	pending: PendingCalendar | null,
+};
+
+export type FinancialCycle = {
+	start: string,
+	end: string,
+	kind: FinancialCycleKind,
+	elapsed: number,
+	remaining: number,
+	days: number,
+};
+
+export type FinancialCycleKind = "regular" | "short" | "extended";
 
 export type FlagState = "flagged" | "overdue" | "dueWithinWeek";
 
@@ -2158,6 +2520,8 @@ export type LedgerStorageMode = "local-isolated" | "turso-sync";
 
 export type LifecycleState = "unselected" | "resolving" | "locked" | "opening" | "ready" | "quiescing";
 
+export type LimitStatus = "under" | "near" | "at" | "over" | "zeroUnused" | "zeroExceeded";
+
 export type LineSave = LineSave_Serialize | LineSave_Deserialize;
 
 export type LineSave_Deserialize = {
@@ -2568,6 +2932,31 @@ export type Payee_Serialize = {
 	draft: PayeeDraft_Serialize,
 };
 
+export type PendingCalendar = {
+	effectiveFrom: string,
+	settings: CalendarInput,
+};
+
+export type PostingAuditItem = PostingAuditItem_Serialize | PostingAuditItem_Deserialize;
+
+export type PostingAuditItem_Deserialize = {
+	id: string,
+	action: string,
+	reason: string,
+	recordedAtMs: string,
+	before?: TxDetail_Deserialize | null,
+	after?: TxDetail_Deserialize | null,
+};
+
+export type PostingAuditItem_Serialize = {
+	id: string,
+	action: string,
+	reason: string,
+	recordedAtMs: string,
+	before: TxDetail_Serialize | null,
+	after: TxDetail_Serialize | null,
+};
+
 export type Predicate = {
 	field: Field,
 	operator: Operator,
@@ -2885,6 +3274,8 @@ export type ReportView_Deserialize = {
 	currency: string,
 	points: ReportPoint_Deserialize[],
 	revision: string,
+	balanceHistoryFloor?: string | null,
+	separatePostings: SeparatePosting[],
 };
 
 export type ReportView_Serialize = {
@@ -2892,6 +3283,8 @@ export type ReportView_Serialize = {
 	currency: string,
 	points: ReportPoint_Serialize[],
 	revision: string,
+	balanceHistoryFloor: string | null,
+	separatePostings: SeparatePosting[],
 };
 
 export type RestoreApply = RestoreApply_Serialize | RestoreApply_Deserialize;
@@ -3114,6 +3507,13 @@ export type SearchQuery_Serialize = {
 	query: string,
 	types: SearchKind[],
 	page: PageReq_Serialize,
+};
+
+export type SeparatePosting = {
+	id: string,
+	date: string,
+	label: string,
+	amount: Money,
 };
 
 export type SetStorageMode = { mode: "local-isolated" } | { mode: "turso-sync"; url: string; authToken: SyncToken };
@@ -3651,6 +4051,7 @@ export type TransferSave_Deserialize = {
 	source: ExistingOrDraft_Deserialize,
 	destination: ExistingOrDraft_Deserialize,
 	rate?: TransferRate | null,
+	fee?: TxDraft_Deserialize | null,
 };
 
 export type TransferSave_Serialize = {
@@ -3658,6 +4059,7 @@ export type TransferSave_Serialize = {
 	source: ExistingOrDraft_Serialize,
 	destination: ExistingOrDraft_Serialize,
 	rate: TransferRate | null,
+	fee: TxDraft_Serialize | null,
 };
 
 export type TursoCredentials = {

@@ -9,7 +9,7 @@
   import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '#lib/components/ui/table/index.js';
   import { Badge } from '#lib/components/ui/badge/index.js';
   import { goto } from '$app/navigation';
-  import { commands, type AccountKind, type AccountDraft_Deserialize, type Amortization, type RatePeriod, type LoanKind, type StatementSource } from '../drivers/runtime';
+  import { commands, type AccountKind, type AccountDraft_Deserialize, type Amortization, type RatePeriod, type LoanKind, type StatementSource, type CorrectionRequest_Deserialize, type CorrectionPreview_Serialize } from '../drivers/runtime';
   import { session, today, pageRequest } from '../stores/session.svelte';
   import { privacy } from '../stores/privacy.svelte';
   import { query,createTask } from '../stores/task.svelte';
@@ -36,6 +36,8 @@
   let dueDay=$state<number|undefined>();
   let mode=$state<'cash'|'accrual'|''>('');
   let loaded=$state('');
+  const openingHistory=query(()=>id==='new'?Promise.resolve([]):session.call(commands.postingAuditList(session.scope,{id})));
+  let openingReview=$state<{request:CorrectionRequest_Deserialize;preview:CorrectionPreview_Serialize}>();
   let balanceAction=$state<'opening'|'adjustment'|null>(null);
   let value=$state('');
   let date=$state(today());
@@ -85,8 +87,23 @@
     event.preventDefault();
     void task.run(async()=>{
       const input={accountId:id,date,reason:reason||null,signedMoney:privacy.amount(currency,value)};
+      if(balanceAction==='opening' && data.value?.account.kind!=='creditCard' && data.value?.account.kind!=='loan'){
+        const request: CorrectionRequest_Deserialize={action:{opening:{accountId:id,amount:input.signedMoney,date}},reason};
+        const preview=await session.call(commands.postingCorrectionPreview(session.scope,request));
+        openingReview={request,preview};
+        return;
+      }
       await session.call(balanceAction==='opening'?commands.accountSetOpening(session.mutation(),input):commands.accountAdjustBalance(session.mutation(),input));
-      balanceAction=null;data.refresh();
+      balanceAction=null;data.refresh();openingHistory.refresh();
+    });
+  }
+  function confirmOpening(){
+    const reviewed=openingReview;
+    if(!reviewed)return;
+    void task.run(async()=>{
+      await session.call(commands.postingCorrectionApply({...session.mutation(),expectedRevision:reviewed.preview.revision},
+        {request:reviewed.request,token:reviewed.preview.token}));
+      openingReview=undefined;balanceAction=null;data.refresh();openingHistory.refresh();
     });
   }
   function saveStatement(event:SubmitEvent){
@@ -118,7 +135,7 @@
   <Card class="mb-4 flex flex-wrap items-center gap-3">
     <AccountTypeIcon kind={data.value.account.kind} wallet={data.value.account.paymentMethod==='Digital wallet'}/>
     <p class="numeric mr-auto text-2xl">{privacy.money(data.value.balance)}</p>
-    <Button variant="outline" onclick={()=>{balanceAction='opening';value='';reason='';date=today();}}>Set starting balance</Button>
+    <Button variant="outline" onclick={()=>{balanceAction='opening';openingReview=undefined;value='';reason='';date=today();}}>Set starting balance</Button>
     <Button variant="outline" onclick={()=>{balanceAction='adjustment';value='';reason='';date=today();}}>Correct balance</Button>
     <Button variant="outline" onclick={()=>task.run(async()=>{
       const account=data.value;
@@ -171,11 +188,44 @@
     <div class="mt-3 flex gap-2"><Button variant="outline" disabled={!scheduleCursor} onclick={()=>scheduleCursor=undefined}>First page</Button><Button variant="outline" disabled={!schedule.value.nextCursor} onclick={()=>scheduleCursor=schedule.value?.nextCursor}>Next page</Button></div>{/if}
   </Card>
 {/if}
-{#if balanceAction}<Modal title={balanceAction==='opening'?'Set starting balance':'Correct balance'} close={()=>balanceAction=null}>
-  <form class="space-y-3" onsubmit={saveBalance}><MoneyField label="Signed amount" bind:value/><Label class="field">Date<Input type="date" bind:value={date} required/></Label>
-    {#if balanceAction==='adjustment'}<Label class="field">Reason<Input required bind:value={reason}/></Label>{/if}
-    <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save</Button></form>
-</Modal>{/if}
+{#if openingHistory.value?.length}
+  <Card as="section" class="mt-4">
+    <h2 class="section-title">Balance history</h2>
+    <ul class="mt-2 divide-y divide-line">
+      {#each openingHistory.value as entry (entry.id)}
+        <li class="py-2 text-sm">
+          <p class="font-medium">{entry.action === 'opening' ? 'Opening snapshot' : 'Balance adjustment'} · {new Date(Number(entry.recordedAtMs)).toLocaleString()}</p>
+          <p>{entry.reason}</p>
+          {#if entry.after}<p>{entry.after.row.bankDate} · {privacy.money(entry.after.row.amount)}</p>{/if}
+        </li>
+      {/each}
+    </ul>
+  </Card>
+{/if}
+{#if balanceAction}
+  {@const snapshot = balanceAction === 'opening' && data.value?.account.kind !== 'creditCard' && data.value?.account.kind !== 'loan'}
+  <Modal title={snapshot?'Set opening snapshot':balanceAction==='opening'?'Set starting balance':'Correct balance'}
+    close={()=>{balanceAction=null;openingReview=undefined;}}>
+    {#if openingReview}
+      <div class="space-y-3">
+        <p>Use {privacy.money(privacy.amount(currency,value))} as the starting balance on {date}. Earlier transactions remain in activity and are excluded from this account balance.</p>
+        {#if openingReview.preview.before}<p>Previous opening entry · {openingReview.preview.before.row.bankDate} · {privacy.money(openingReview.preview.before.row.amount)}</p>{/if}
+        <Feedback error={task.error}/>
+        <div class="flex flex-wrap gap-2">
+          <Button variant="outline" type="button" onclick={()=>openingReview=undefined}>Back</Button>
+          <Button disabled={task.busy} onclick={confirmOpening}>Confirm snapshot</Button>
+        </div>
+      </div>
+    {:else}
+      <form class="space-y-3" onsubmit={saveBalance}>
+        <MoneyField label="Signed amount" bind:value/>
+        <Label class="field">Date<Input type="date" bind:value={date} required/></Label>
+        {#if snapshot || balanceAction==='adjustment'}<Label class="field">Reason<Input required maxlength={500} bind:value={reason}/></Label>{/if}
+        <Feedback error={task.error}/><Button type="submit" disabled={task.busy}>{snapshot?'Review snapshot':'Save'}</Button>
+      </form>
+    {/if}
+  </Modal>
+{/if}
 {#if statementForm}<Modal title="Card statement" close={()=>statementForm=false}>
   <form class="space-y-3" onsubmit={saveStatement}><Label class="field">Close date<Input type="date" bind:value={closeOn} required/></Label><Label class="field">Due date<Input type="date" bind:value={dueOn} required/></Label>
     <Feedback error={task.error}/><Button variant="default" type="submit"  disabled={task.busy}>Save statement</Button>

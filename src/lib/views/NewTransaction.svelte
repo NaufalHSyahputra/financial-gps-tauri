@@ -47,6 +47,8 @@
   let categorySearch = $state('');
   let description = $state('');
   let notes = $state('');
+  let feeAmount = $state('');
+  let feeCategory = $state('');
   let date = $state(today());
   let groupId = $state('');
   let localError = $state('');
@@ -126,7 +128,9 @@
       if (kind === 'Transfer') {
         const saved = await session.call(commands.transferSave(session.mutation(), {
           source: { kind: 'draft', draft: { ...shared, accountId: sourceId, amount, direction: 'debit' } },
-          destination: { kind: 'draft', draft: { ...shared, accountId: destinationId, amount, direction: 'credit' } }
+          destination: { kind: 'draft', draft: { ...shared, accountId: destinationId, amount, direction: 'credit' } },
+          fee: feeAmount.trim() ? { ...shared, description: 'Transfer fee', accountId: sourceId,
+            amount: privacy.amount(currency, feeAmount.replace(',', '.')), categoryId: feeCategory || null, direction: 'debit' } : null
         }));
         id = saved.value.pair.source.row.id;
       } else {
@@ -254,6 +258,19 @@
           <Label class="field">Date<Input type="date" bind:value={date} required/></Label>
         </div>
         <Label class="field">Notes (optional)<Textarea bind:value={notes} maxlength={1000} rows={3}></Textarea></Label>
+        {#if kind === 'Transfer'}
+          <div class="form-grid">
+            <Label class="field">Transfer fee (optional)<Input type={privacy.masked ? 'password' : 'text'} inputmode="decimal" bind:value={feeAmount}/></Label>
+            {#if feeAmount.trim()}
+              <Label class="field">Fee category<NativeSelect bind:value={feeCategory} required>
+                <option value="">Choose a category</option>
+                {#each matchingCategories.filter(row=>!row.draft.ignored) as row (row.id)}
+                  <option value={row.id}>{row.draft.name}</option>
+                {/each}
+              </NativeSelect></Label>
+            {/if}
+          </div>
+        {/if}
         {#if kind === 'Expense' && groups.value?.rows.some(item => !item.archived)}
           <Label class="field">Shared group (optional)<NativeSelect bind:value={groupId}><option value="">No shared group</option>
             {#each groups.value.rows.filter(item => !item.archived) as group (group.id)}<option value={group.id}>{group.name}</option>{/each}

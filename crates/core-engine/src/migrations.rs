@@ -13,6 +13,10 @@ pub const UPGRADES: &[Upgrade] = &[
         sql: include_str!("../migrations/0003_category_icons.sql"),
         irreversible: false,
     },
+    Upgrade {
+        sql: include_str!("../migrations/0004_financial_planning.sql"),
+        irreversible: false,
+    },
 ];
 pub const SCHEMA_VERSION: u32 = INITIAL_VERSION + UPGRADES.len() as u32;
 pub const INITIAL_SQL: &str = include_str!("../migrations/0001_init.sql");

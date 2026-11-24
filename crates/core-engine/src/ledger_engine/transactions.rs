@@ -394,6 +394,15 @@ fn save_posting(
             || old.row.amount.currency != draft.amount.currency
             || old.row.amount.minor != draft.amount.minor
             || old.row.direction.as_str() != draft.direction.as_str();
+        super::corrections::check_dependencies(
+            ctx,
+            &id,
+            differs
+                || old.row.bank_date != draft.bank_date
+                || old.row.ignored != draft.ignored
+                || old.row.exclude_from_pnl != draft.exclude_from_pnl
+                || old.row.status.as_str() != draft.status.as_str(),
+        )?;
         if !import
             && !old.sources.is_empty()
             && (differs
@@ -621,6 +630,7 @@ fn check_removal(
     retain_occurrence: bool,
 ) -> Result<TxDetail> {
     let detail = get(ctx, id)?;
+    super::corrections::check_dependencies(ctx, id, true)?;
     if detail.row.transfer_id.is_some() || (!opening && detail.row.entry_kind == EntryKind::Opening)
     {
         return Err(conflict("protected_posting"));
@@ -636,6 +646,14 @@ fn check_removal(
     Ok(detail)
 }
 pub fn remove(ctx: &Context<'_>, id: &str, opening: bool) -> Result<Deleted> {
+    let audited: bool = ctx.tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM posting_audit WHERE transaction_id=?1)",
+        [id],
+        |r| r.get(0),
+    )?;
+    if audited {
+        return Err(conflict("posting_has_audited_dependencies"));
+    }
     let detail = check_delete(ctx, id, opening)?;
     if !detail.draft.splits.is_empty() {
         ctx.tx
@@ -1085,12 +1103,24 @@ fn running_balance(ctx: &Context<'_>, selected: &mut [(String, TxRow)]) -> Resul
             (row.bank_date.clone(), row.id.clone())
         };
         indices.sort_unstable_by_key(|index| key(*index));
+        let floor = accounts::opening_floor(ctx, &account)?;
+        if let Some(floor) = &floor {
+            indices.retain(|index| selected[*index].1.bank_date >= *floor);
+            if indices.is_empty() {
+                continue;
+            }
+        }
         let (first, first_id) = key(indices[0]);
         let (last, last_id) = key(*indices.last().expect("one selected row"));
         let mut total = accounts::balance(ctx, &account, parse_date(&first)?, Some(&first_id))?;
+        let snapshot = if floor.is_some() {
+            "AND NOT (t.bank_date=?2 AND t.entry_kind='opening')"
+        } else {
+            ""
+        };
         let mut stmt=ctx.tx.prepare_cached(&format!("SELECT t.bank_date,t.id,CASE t.direction WHEN 'credit' THEN t.amount_minor ELSE -t.amount_minor END
             FROM transactions t JOIN accounts a ON a.id=t.account_id WHERE t.account_id=?1 AND
-            (t.bank_date,t.id)>(?2,?3) AND (t.bank_date,t.id)<=(?4,?5) AND {} ORDER BY t.bank_date,t.id",accounts::BALANCE_VISIBLE))?;
+            (t.bank_date,t.id)>(?2,?3) AND (t.bank_date,t.id)<=(?4,?5) AND {} {snapshot} ORDER BY t.bank_date,t.id",accounts::BALANCE_VISIBLE))?;
         let mut rows = stmt.query(params![account, first, first_id, last, last_id])?;
         let mut pending = rows.next()?.as_ref().map(movement).transpose()?;
         for position in indices {

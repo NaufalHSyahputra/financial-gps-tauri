@@ -4,7 +4,8 @@
   import { NativeSelect } from '#lib/components/ui/native-select/index.js';
   import { Input, RadioInput } from '#lib/components/ui/input/index.js';
   import { Button } from '#lib/components/ui/button/index.js';
-  import type { AccountDraft_Deserialize, Money } from '../drivers/runtime';
+  import { NativeCheckbox } from '#lib/components/ui/checkbox/index.js';
+  import type { AccountDraft_Deserialize, CalendarInput, Money } from '../drivers/runtime';
   import { accountOptions, setupCurrencies } from '../account-types';
   import { formatMinor, toMinor } from '../money';
   import { privacy } from '../stores/privacy.svelte';
@@ -13,7 +14,7 @@
 
   let { initial = false, base = 'IDR', busy = false, error = '', locked = false, complete }: {
     initial?: boolean; base?: string; busy?: boolean; error?: string; locked?: boolean;
-    complete: (draft: AccountDraft_Deserialize, startingBalance: Money) => void;
+    complete: (draft: AccountDraft_Deserialize, startingBalance: Money, calendar?: CalendarInput) => void;
   } = $props();
   let step = $state(1);
   let currency = $state('');
@@ -23,6 +24,9 @@
   const option = $derived(accountOptions[selected]);
   let name = $state('');
   let balance = $state('');
+  let setupCalendar = $state(false);
+  let anchor = $state(25);
+  let timezone = $state('Asia/Jakarta');
   let localError = $state('');
   const preview = $derived.by(() => {
     try { return formatMinor({ currency: code, minor: toMinor(balance.trim().replace(',', '.') || '0', scale) }, scale, privacy.locale(code)); }
@@ -36,7 +40,7 @@
     try {
       const minor = toMinor(balance.trim().replace(',', '.') || '0', scale);
       if (BigInt(minor) < -9_000_000_000_000n || BigInt(minor) > 9_000_000_000_000n) throw new Error('Enter a smaller starting balance.');
-      complete({ name: name.trim(), kind: option.kind, currencyCode: code, paymentMethod: option.wallet ? 'Digital wallet' : null }, { currency: code, minor });
+      complete({ name: name.trim(), kind: option.kind, currencyCode: code, paymentMethod: option.wallet ? 'Digital wallet' : null }, { currency: code, minor }, initial && code === 'IDR' && setupCalendar ? { anchor, timezone, weekdayPolicy: 'none' } : undefined);
     } catch (cause) { localError = (cause as Error).message; }
   }
 </script>
@@ -76,6 +80,19 @@
           <div><dt class="text-sm text-muted-foreground">Account</dt><dd>{name.trim()} · {option.label}</dd></div>
           <div><dt class="text-sm text-muted-foreground">Starting balance</dt><dd class="numeric">{privacy.masked ? '••••' : preview}</dd></div>
         </dl>
+        {#if initial && code === 'IDR'}
+          <Label class="check"><NativeCheckbox bind:checked={setupCalendar} /> Set up a payday cycle</Label>
+          {#if setupCalendar}
+            <div class="form-grid">
+              <Label class="field">Payday<Input type="number" min={1} max={31} bind:value={anchor} required /></Label>
+              <Label class="field">Financial timezone<NativeSelect bind:value={timezone}>
+                <option value="Asia/Jakarta">Jakarta (WIB)</option>
+                <option value="Asia/Makassar">Makassar (WITA)</option>
+                <option value="Asia/Jayapura">Jayapura (WIT)</option>
+              </NativeSelect></Label>
+            </div>
+          {/if}
+        {/if}
       {/if}
       <Feedback error={localError || error}/>
       <div class="flex flex-wrap gap-2">

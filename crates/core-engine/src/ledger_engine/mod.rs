@@ -3,6 +3,7 @@ pub mod staging;
 pub use receipts::ReceiptValue;
 pub mod accounts;
 pub mod catalog;
+pub mod corrections;
 pub mod export;
 pub mod fx;
 pub mod reports;
