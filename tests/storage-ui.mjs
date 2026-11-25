@@ -616,14 +616,20 @@ async function verifyCategoryIcons(width, height) {
     await button(phoneNav, 'More').click();
     await page.getByRole('dialog', { name: 'More' }).getByRole('link', { name, exact: true }).click();
   }
-  async function pick(dialog, label, id) {
+  async function pick(dialog, label, id, query = label) {
     const parentId = await dialog.getAttribute('id');
     await dialog.getByRole('button', { name: /^Category icon/ }).click();
     const picker = page.getByRole('dialog', { name: 'Choose category icon' });
     await glassPanel(picker, true);
     assert.equal(await picker.evaluate((_, id) => getComputedStyle(document.getElementById(id)).backdropFilter, parentId), 'none');
     assert.equal(await picker.getAttribute('data-slot'), mobile ? 'drawer-content' : 'popover-content');
-    await picker.getByRole('searchbox', { name: 'Search icons' }).fill(label);
+    const searchbox = picker.getByRole('searchbox', { name: 'Search icons' });
+    await searchbox.fill('ojol');
+    await picker.locator('[data-icon-choice="train-front"]').waitFor();
+    await button(picker, 'Clear icon search').click();
+    assert.equal(await searchbox.inputValue(), '');
+    await picker.getByRole('group', { name: 'Icon categories' }).getByRole('button', { name: 'Food', exact: true }).click();
+    await searchbox.fill(query);
     await picker.locator(`[data-icon-choice="${id}"]`).getByText(label, { exact: true }).click();
     await picker.waitFor({ state: 'hidden' });
   }
@@ -658,13 +664,13 @@ async function verifyCategoryIcons(width, height) {
   await categoryDelete.waitFor({ state:'hidden' });
   await button(categoryActions, 'Edit').click();
   edit = page.getByRole('dialog', { name: 'Edit category' });
-  await pick(edit, 'Shopping', 'shopping-bag');
+  await pick(edit, 'Store & Retail', 'store');
   await button(edit, 'Save category').click();
-  await cell.locator('[data-category-icon="shopping-bag"]').waitFor();
+  await cell.locator('[data-category-icon="store"]').waitFor();
   await page.reload();
   await button(page, 'Open Personal activity').click();
   await open('Categories');
-  await cell.locator('[data-category-icon="shopping-bag"]').waitFor();
+  await cell.locator('[data-category-icon="store"]').waitFor();
 
   await open('Transactions');
   await page.getByRole('link', { name: 'New transaction', exact: true }).click();
@@ -675,16 +681,16 @@ async function verifyCategoryIcons(width, height) {
   }
   await button(page, 'Continue').click();
   const category = button(page, name);
-  await category.locator('[data-category-icon="shopping-bag"]').waitFor();
+  await category.locator('[data-category-icon="store"]').waitFor();
   await noOverflow();
   await category.click();
   await button(page, mobile ? 'Save' : 'Save Transaction').click();
   await page.getByRole('heading', { name, exact: true }).waitFor();
-  await page.locator('main [data-category-icon="shopping-bag"]').waitFor();
+  await page.locator('main [data-category-icon="store"]').waitFor();
   if (mobile) await page.getByRole('link', { name: 'Back', exact: true }).click();
   else await open('Transactions');
   const txRow = page.getByRole(mobile ? 'listitem' : 'row').filter({ has: page.getByRole('link', { name: /^Groceries/ }) });
-  await txRow.locator('[data-category-icon="shopping-bag"]').waitFor();
+  await txRow.locator('[data-category-icon="store"]').waitFor();
   const actions = txRow.getByRole('group', { name: 'Actions for Groceries' });
   if (mobile) {
     const linkBox = await txRow.getByRole('link', { name: /^Groceries/ }).boundingBox();
@@ -738,12 +744,12 @@ async function verifyCategoryIcons(width, height) {
   await budget.getByRole('combobox', { name: /^Category/ }).selectOption({ label: name });
   await budget.getByLabel('Limit', { exact: true }).fill('50000');
   await button(budget, 'Save').click();
-  await page.getByRole('heading', { name, exact: true }).locator('[data-category-icon="shopping-bag"]').waitFor();
+  await page.getByRole('heading', { name, exact: true }).locator('[data-category-icon="store"]').waitFor();
   await noOverflow();
 
   await open('Dashboard');
-  await page.getByRole('region', { name: 'Recent activity' }).locator('[data-category-icon="shopping-bag"]').filter({ visible: true }).waitFor();
-  await page.getByRole('region', { name: 'Your plan' }).locator('[data-category-icon="shopping-bag"]').waitFor();
+  await page.getByRole('region', { name: 'Recent activity' }).locator('[data-category-icon="store"]').filter({ visible: true }).waitFor();
+  await page.getByRole('region', { name: 'Your plan' }).locator('[data-category-icon="store"]').waitFor();
   await noOverflow();
   await page.context().close();
   console.log(`PASS ${width}×${height} icon-only row actions, adaptive glass overflow, delete confirmations, touch targets, detail navigation, category icons, and no horizontal overflow`);
@@ -952,6 +958,33 @@ try {
   await verifyCategoryIcons(390, 844);
   await verifyCategoryIcons(768, 1024);
   await verifyCategoryIcons(1280, 800);
+
+  // Verify category presets: Essential Global Starter & Start Empty
+  {
+    const { page: presetPage } = await newDevice(true, { viewport: { width: 360, height: 800 }, hasTouch: true });
+    const form = presetPage.getByRole('region', { name: 'Create activity' });
+    await form.getByLabel('Name', { exact: true }).fill('Global Preset Ledger');
+    await form.getByRole('radio', { name: /Essential Global Starter/ }).check();
+    await button(form, 'Create activity').click();
+    await presetPage.waitForURL(origin + '/dashboard');
+    await button(presetPage.getByRole('navigation', { name: 'Mobile navigation' }), 'More').click();
+    await presetPage.getByRole('dialog', { name: 'More' }).getByRole('link', { name: 'Categories', exact: true }).click();
+    await presetPage.getByRole('cell', { name: 'Groceries', exact: true }).locator('[data-category-icon="shopping-cart"]').waitFor();
+    await presetPage.getByRole('cell', { name: 'Salary', exact: true }).locator('[data-category-icon="banknote"]').waitFor();
+    assert.ok(await presetPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+    await presetPage.context().close();
+
+    const { page: blankPage } = await newDevice(true);
+    const blankForm = blankPage.getByRole('region', { name: 'Create activity' });
+    await blankForm.getByLabel('Name', { exact: true }).fill('Blank Ledger');
+    await blankForm.getByRole('radio', { name: /Start Empty/ }).check();
+    await button(blankForm, 'Create activity').click();
+    await blankPage.waitForURL(origin + '/dashboard');
+    await nav(blankPage, 'Categories').click();
+    await blankPage.getByText('No matching categories.').waitFor();
+    await blankPage.context().close();
+    console.log('PASS category presets (Essential Global Starter & Start Empty)');
+  }
   const { page: a, external } = await newDevice();
   const local = a.getByRole('region', { name: 'Create activity' });
   assert.ok(await local.getByRole('radio', { name: 'Local Only' }).isChecked());

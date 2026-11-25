@@ -18,6 +18,13 @@
   import { goto } from '$app/navigation';
   import Modal from '../lib/components/Modal.svelte';
   import RestoreFlow from '../lib/views/RestoreFlow.svelte';
+  import CategoryPresetSelector from '../lib/components/CategoryPresetSelector.svelte';
+  import {
+    applyCategoryPreset,
+    defaultGroupKeysForPreset,
+    type PresetId,
+    type PresetLocale,
+  } from '../lib/presets/category-presets';
 
   const launcher = useLauncher();
   const currencies = setupCurrencies.map(item => item.code);
@@ -51,6 +58,10 @@
   let encrypted = $state(false);
   let storageMode = $state<LedgerStorageMode>('local-isolated');
   let url = $state(''), token = $state(''), storageError = $state(''), connectionMessage = $state('');
+  let presetId = $state<PresetId>('indonesia-personal');
+  let presetLocale = $state<PresetLocale>('en');
+  let selectedGroupKeys = $state<string[]>(defaultGroupKeysForPreset('indonesia-personal'));
+  let seedingCategories = $state(false);
   const connection = () => ({ url: url.trim(), authToken: token });
 
   function verifyConnection() {
@@ -102,18 +113,35 @@
           rememberKey,
           credential,
           destination: cloud ? undefined : destination?.id
-        }, cloud ? async ledger => {
-          try {
-            const status = await saveStorageMode(ledger.scope, { mode: 'turso-sync', ...connection() });
-            storageSync.receive(ledger.scope, status);
-          } catch (error) {
-            storageError = `Activity created in Local Only. Open Storage & Sync to finish enrollment. ${storageMessage(error)}`;
-            throw new Error(storageError);
+        }, async ledger => {
+          if (cloud) {
+            try {
+              const status = await saveStorageMode(ledger.scope, { mode: 'turso-sync', ...connection() });
+              storageSync.receive(ledger.scope, status);
+            } catch (error) {
+              storageError = `Activity created in Local Only. Open Storage & Sync to finish enrollment. ${storageMessage(error)}`;
+              throw new Error(storageError);
+            }
           }
-        } : undefined);
+          if (presetId !== 'blank' && selectedGroupKeys.length) {
+            seedingCategories = true;
+            try {
+              await applyCategoryPreset({
+                scope: ledger.scope,
+                presetId,
+                locale: presetLocale,
+                selectedGroupKeys,
+              });
+            } finally {
+              seedingCategories = false;
+            }
+          }
+        });
         name = '';
         encrypted = false;
         storageMode = 'local-isolated';
+        presetId = 'indonesia-personal';
+        selectedGroupKeys = defaultGroupKeysForPreset('indonesia-personal');
       } catch (error) {
         if (!storageError) throw error;
       } finally {
@@ -227,6 +255,14 @@
         </div>
         {/if}
         {#if storageError}<p class="error text-sm" role="alert">{storageError}</p>{/if}
+        <CategoryPresetSelector
+          bind:presetId
+          bind:locale={presetLocale}
+          bind:selectedGroupKeys
+        />
+        {#if seedingCategories}
+          <p role="status" class="text-sm text-muted-foreground">Setting up starter categories…</p>
+        {/if}
         <Label class="check border-t border-line pt-4">
           <NativeCheckbox  bind:checked={encrypted} />
           <span>Protect this activity with a passphrase</span>

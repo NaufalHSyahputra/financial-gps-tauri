@@ -16,6 +16,13 @@
   import Heading from '../components/Heading.svelte';
   import Feedback from '../components/Feedback.svelte';
   import Modal from '../components/Modal.svelte';
+  import CategoryPresetSelector from '../components/CategoryPresetSelector.svelte';
+  import {
+    applyCategoryPreset,
+    defaultGroupKeysForPreset,
+    type PresetId,
+    type PresetLocale,
+  } from '../presets/category-presets';
   let { mode }: {mode:'categories'|'payees'}=$props();
   const categoryMode=$derived(mode==='categories');
   const noun=$derived(categoryMode?'category':'person or store');
@@ -43,6 +50,25 @@
   let replacement=$state('');
   let merging=$state(false);
   let mergeFrom=$state<string[]>([]);
+  let templateOpen=$state(false);
+  let presetId=$state<PresetId>('indonesia-personal');
+  let presetLocale=$state<PresetLocale>('en');
+  let selectedGroupKeys=$state<string[]>(defaultGroupKeysForPreset('indonesia-personal'));
+  let templateMessage=$state('');
+  function applyTemplate() {
+    void task.run(async () => {
+      const result = await applyCategoryPreset({
+        scope: session.scope,
+        presetId,
+        locale: presetLocale,
+        selectedGroupKeys,
+      });
+      templateOpen = false;
+      templateMessage = `Added ${result.groupsCreated} groups and ${result.categoriesCreated} categories`
+        + (result.skipped ? ` (${result.skipped} existing skipped).` : '.');
+      refresh();
+    });
+  }
   function categoryDraft(draft: CategoryDraft_Serialize | PayeeDraft_Serialize): draft is CategoryDraft_Serialize {
     return 'kind' in draft;
   }
@@ -74,7 +100,9 @@
   }
 </script>
 <Heading title={categoryMode?'Categories':'People & stores'}>
-  {#if categoryMode}<Button variant="outline" onclick={()=>{name='';groupOrder=0;target=null;groupEdit=true;}}>New group</Button>
+  {#if categoryMode}
+    <Button variant="outline" onclick={()=>{templateMessage='';templateOpen=true;}}>Starter templates</Button>
+    <Button variant="outline" onclick={()=>{name='';groupOrder=0;target=null;groupEdit=true;}}>New group</Button>
   {:else}<Button variant="outline" onclick={()=>{replacement='';mergeFrom=[];merging=true;}}>Combine duplicate names</Button>{/if}
   <Button variant="default"  onclick={()=>editEntry()}>New {noun}</Button>
 </Heading>
@@ -83,6 +111,7 @@
   <Label class="check"><NativeCheckbox  bind:checked={includeArchived} onchange={()=>cursor=undefined}/> Include archived</Label>
 </Card>
 <Feedback error={task.error||categories.error||payees.error||groups.error} loading={categories.loading||payees.loading}/>
+{#if templateMessage}<p role="status" class="mb-4 rounded-lg border border-line bg-ground px-4 py-3 text-sm text-ink">{templateMessage}</p>{/if}
 {#if categoryMode && groups.value?.rows.length}
   <Card as="section" class="mb-4"><h2 class="section-title mb-2">Category groups</h2>
     {#each groups.value.rows as item (item.id)}<div class="flex items-center gap-2 border-t border-line py-2"><span class="mr-auto">{item.draft.name}</span>
@@ -97,7 +126,14 @@
     <span class="break-words">{item.draft.name}</span>
   </div></TableCell><TableCell>{item.draft.archived?'Archived':'Active'}{#if categoryDraft(item.draft)} · {item.draft.kind}{/if}</TableCell>
     <TableCell class="text-right"><RowActions onEdit={()=>editEntry(item)} onDelete={()=>{replacement='';removal={id:item.id,name:item.draft.name};}}/></TableCell></TableRow>
-  {:else}<TableRow><TableCell colspan={3} class="text-muted-foreground">No matching {categoryMode?'categories':'people or stores'}.</TableCell></TableRow>{/each}
+  {:else}<TableRow><TableCell colspan={3} class="text-muted-foreground">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <span>No matching {categoryMode?'categories':'people or stores'}.</span>
+      {#if categoryMode && !search && !includeArchived}
+        <Button variant="outline" size="sm" class="min-h-11" onclick={()=>{templateMessage='';templateOpen=true;}}>Starter templates</Button>
+      {/if}
+    </div>
+  </TableCell></TableRow>{/each}
 </TableBody></Table></div>
 <div class="mt-3 flex gap-2"><Button variant="outline" disabled={!cursor} onclick={()=>cursor=undefined}>First page</Button><Button variant="outline" disabled={!page?.nextCursor} onclick={()=>cursor=page?.nextCursor}>Next page</Button></div>
 {#if edit}<Modal title={(target?'Edit ':'New ')+noun} close={()=>edit=false}><form id={modalForm + '-catalog'} class="space-y-3" onsubmit={save}>
@@ -146,3 +182,22 @@
     await session.call(commands.payeeMerge(session.mutation(),{fromIds:mergeFrom.filter(id=>id!==replacement),intoId:replacement,confirm:true}));merging=false;refresh();})}>Merge and move references</Button>
   {/snippet}
 </Modal>{/if}
+{#if templateOpen && categoryMode}
+  <Modal title="Starter category templates" close={() => (templateOpen = false)}>
+    <div class="space-y-3">
+      <p class="text-sm text-muted-foreground">Import a curated set of category groups and icons. Existing categories with matching names are skipped safely.</p>
+      <CategoryPresetSelector
+        allowBlank={false}
+        bind:presetId
+        bind:locale={presetLocale}
+        bind:selectedGroupKeys
+      />
+      <Feedback error={task.error}/>
+    </div>
+    {#snippet footer()}
+      <Button variant="default" disabled={task.busy || !selectedGroupKeys.length} onclick={applyTemplate}>
+        {task.busy ? 'Applying…' : 'Apply template'}
+      </Button>
+    {/snippet}
+  </Modal>
+{/if}

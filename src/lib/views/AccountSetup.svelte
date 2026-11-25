@@ -5,12 +5,20 @@
   import { Input, RadioInput } from '#lib/components/ui/input/index.js';
   import { Button } from '#lib/components/ui/button/index.js';
   import { NativeCheckbox } from '#lib/components/ui/checkbox/index.js';
-  import type { AccountDraft_Deserialize, CalendarInput, Money } from '../drivers/runtime';
+  import { commands, type AccountDraft_Deserialize, type CalendarInput, type Money } from '../drivers/runtime';
   import { accountOptions, setupCurrencies } from '../account-types';
   import { formatMinor, toMinor } from '../money';
   import { privacy } from '../stores/privacy.svelte';
+  import { session, message } from '../stores/session.svelte';
   import AccountTypeIcon from '#lib/icons/AccountTypeIcon.svelte';
   import Feedback from '../components/Feedback.svelte';
+  import CategoryPresetSelector from '../components/CategoryPresetSelector.svelte';
+  import {
+    applyCategoryPreset,
+    defaultGroupKeysForPreset,
+    type PresetId,
+    type PresetLocale,
+  } from '../presets/category-presets';
 
   let { initial = false, base = 'IDR', busy = false, error = '', locked = false, complete }: {
     initial?: boolean; base?: string; busy?: boolean; error?: string; locked?: boolean;
@@ -28,6 +36,54 @@
   let anchor = $state(25);
   let timezone = $state('Asia/Jakarta');
   let localError = $state('');
+  let hasZeroCategories = $state(false);
+  let presetExpanded = $state(false);
+  let presetId = $state<PresetId>('indonesia-personal');
+  let presetLocale = $state<PresetLocale>('en');
+  let selectedGroupKeys = $state<string[]>(defaultGroupKeysForPreset('indonesia-personal'));
+  let presetBusy = $state(false);
+  let presetNotice = $state('');
+
+  $effect(() => {
+    const active = session.active;
+    if (!active) {
+      hasZeroCategories = false;
+      return;
+    }
+    let cancelled = false;
+    void commands
+      .categoriesList(active.scope, { includeArchived: true, page: { cursor: null, limit: 1 } })
+      .then(result => {
+        if (!cancelled && result.status === 'ok') {
+          hasZeroCategories = result.data.rows.length === 0;
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  });
+
+  async function applyStarterCategories() {
+    if (presetBusy || !selectedGroupKeys.length) return;
+    presetBusy = true;
+    localError = '';
+    try {
+      const result = await applyCategoryPreset({
+        scope: session.scope,
+        presetId,
+        locale: presetLocale,
+        selectedGroupKeys,
+      });
+      hasZeroCategories = false;
+      presetExpanded = false;
+      presetNotice = `Added ${result.groupsCreated} category groups and ${result.categoriesCreated} categories.`;
+    } catch (cause) {
+      localError = message(cause);
+    } finally {
+      presetBusy = false;
+    }
+  }
   const preview = $derived.by(() => {
     try { return formatMinor({ currency: code, minor: toMinor(balance.trim().replace(',', '.') || '0', scale) }, scale, privacy.locale(code)); }
     catch { return '—'; }
@@ -92,6 +148,45 @@
               </NativeSelect></Label>
             </div>
           {/if}
+        {/if}
+        {#if hasZeroCategories || presetNotice}
+          <div class="rounded-lg border border-line bg-ground p-4 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p class="font-medium text-ink">Starter categories</p>
+                <p class="text-sm text-muted-foreground">
+                  {presetNotice || 'This activity has no categories yet. Apply a starter pack before finishing setup.'}
+                </p>
+              </div>
+              {#if hasZeroCategories}
+                <Button
+                  type="button"
+                  variant="outline"
+                  class="min-h-11"
+                  onclick={() => (presetExpanded = !presetExpanded)}
+                >
+                  {presetExpanded ? 'Hide templates' : 'Choose template'}
+                </Button>
+              {/if}
+            </div>
+            {#if hasZeroCategories && presetExpanded}
+              <CategoryPresetSelector
+                allowBlank={false}
+                bind:presetId
+                bind:locale={presetLocale}
+                bind:selectedGroupKeys
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                class="min-h-11"
+                disabled={presetBusy || !selectedGroupKeys.length}
+                onclick={applyStarterCategories}
+              >
+                {presetBusy ? 'Applying categories…' : 'Apply starter categories'}
+              </Button>
+            {/if}
+          </div>
         {/if}
       {/if}
       <Feedback error={localError || error}/>
